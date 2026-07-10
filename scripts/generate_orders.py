@@ -31,7 +31,7 @@ from generator.writers.parquet_writer import write_entities_to_parquet
 # Configuration
 # ─────────────────────────────────────────────────────────
 
-TARGET_ORDERS = 100_000  # start small, scale to 3M later
+TARGET_ORDERS = 3_000_000  # start small, scale to 3M later
 SEED = 42
 START_DATE = date(2023, 1, 1)
 END_DATE = date(2025, 12, 31)
