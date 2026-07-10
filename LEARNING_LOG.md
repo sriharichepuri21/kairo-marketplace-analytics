@@ -31,3 +31,31 @@ Format: `## YYYY-MM-DD — Session Title`
 - Set up Python virtual environment with `uv`
 - Install first Python packages
 - Make first Git commit
+
+## 2026-07-09 (evening) — Python Environment & Data Stack Wired Up
+
+**What I did:**
+- Initialized Python project with `uv init` pinned to 3.11
+- Created and activated virtual environment
+- Installed Polars, DuckDB, Pandas, PyArrow
+- Wrote a smoke test that ran a SQL query via DuckDB against a Polars DataFrame
+- Made second Git commit with proper conventional-commit message
+
+**What I learned:**
+- `uv init` + `uv venv` + `uv add` is the modern Python setup flow
+- Virtual environments must be activated (`source .venv/bin/activate`) to use them
+- `git add` and `git commit` are two separate steps — I confused this once
+- Empty files (0 bytes) run silently in Python — always verify file size after creating
+- REPL (`python`) vs script (`python file.py`) are different modes
+- DuckDB can SQL-query a Polars DataFrame directly, no conversion needed
+
+**What confused me:**
+- (write your honest answer — one sentence is fine)
+
+**What I want to understand better next time:**
+- (write your honest answer)
+
+**Next session:**
+- Build the proper project folder structure
+- Start business context documentation
+- Begin the metric catalog
