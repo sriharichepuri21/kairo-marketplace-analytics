@@ -59,3 +59,9 @@ dbt_project/logs/
 # ─────────────────────────────────────────
 .ipynb_checkpoints/
 *.ipynb_checkpoints
+
+# ─────────────────────────────────────────
+# Chaos engine
+# ─────────────────────────────────────────
+raw_data_clean/
+chaos_manifest/
