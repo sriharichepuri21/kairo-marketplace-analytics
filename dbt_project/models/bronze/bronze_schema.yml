@@ -1,0 +1,69 @@
+version: 2
+
+models:
+  - name: bronze__customers
+    description: "Raw customer data loaded from messy Parquet"
+    columns:
+      - name: customer_id
+        tests:
+          - not_null
+
+  - name: bronze__orders
+    description: "Raw order data with chaos injected"
+    columns:
+      - name: order_id
+        tests:
+          - not_null
+
+  - name: bronze__order_items
+    description: "Raw order items with orphans and type drift"
+    columns:
+      - name: order_item_id
+        tests:
+          - not_null
+
+  - name: bronze__sellers
+    description: "Raw seller data (clean)"
+    columns:
+      - name: seller_id
+        tests:
+          - not_null
+          - unique
+
+  - name: bronze__products
+    description: "Raw product data (clean)"
+    columns:
+      - name: product_id
+        tests:
+          - not_null
+          - unique
+
+  - name: bronze__payments
+    description: "Raw payment data with duplicates and orphans"
+    columns:
+      - name: payment_id
+        tests:
+          - not_null
+
+  - name: bronze__shipments
+    description: "Raw shipment data with duplicates"
+    columns:
+      - name: shipment_id
+        tests:
+          - not_null
+
+  - name: bronze__returns
+    description: "Raw return data"
+    columns:
+      - name: return_id
+        tests:
+          - not_null
+          - unique
+
+  - name: bronze__reviews
+    description: "Raw review data with orphan products"
+    columns:
+      - name: review_id
+        tests:
+          - not_null
+          - unique

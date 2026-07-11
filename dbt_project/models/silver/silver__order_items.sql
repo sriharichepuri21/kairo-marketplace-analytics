@@ -1,10 +1,3 @@
--- Silver layer: cleaned order items
---
--- Issues fixed (from profiling):
---   1. Orphan records filtered (order_id starts with 'ORPHAN-')
---   2. Negative quantities set to NULL and flagged
---   3. Type drift fixed: unit_price, unit_cost, line_total cast to DOUBLE
-
 WITH orphans_removed AS (
     SELECT *
     FROM {{ ref('bronze__order_items') }}
@@ -19,34 +12,14 @@ type_fixed AS (
         seller_id,
         category,
 
-        -- Fix negative quantities
         CASE WHEN quantity < 0 THEN NULL ELSE quantity END AS quantity,
         CASE WHEN quantity < 0 THEN TRUE ELSE FALSE END AS _had_negative_quantity,
 
-        -- Type drift fix: strip symbols, cast to numeric
-        TRY_CAST(
-            REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(
-                TRIM(unit_price),
-                '$', ''), '€', ''), 'R$', ''), 'USD ', ''), ',', '.')
-            AS DOUBLE
-        ) AS unit_price,
-
-        TRY_CAST(
-            REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(
-                TRIM(unit_cost),
-                '$', ''), '€', ''), 'R$', ''), 'USD ', ''), ',', '.')
-            AS DOUBLE
-        ) AS unit_cost,
-
+        {{ clean_numeric('unit_price') }} AS unit_price,
+        {{ clean_numeric('unit_cost') }} AS unit_cost,
         discount_amount,
         tax_amount,
-
-        TRY_CAST(
-            REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(
-                TRIM(line_total),
-                '$', ''), '€', ''), 'R$', ''), 'USD ', ''), ',', '.')
-            AS DOUBLE
-        ) AS line_total
+        {{ clean_numeric('line_total') }} AS line_total
 
     FROM orphans_removed
 )

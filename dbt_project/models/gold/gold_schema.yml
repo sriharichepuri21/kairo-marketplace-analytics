@@ -1,0 +1,147 @@
+version: 2
+
+models:
+  - name: dim_dates
+    description: "Date dimension covering 2022-2026"
+    columns:
+      - name: date_day
+        tests:
+          - not_null
+          - unique
+      - name: year
+        tests:
+          - not_null
+      - name: month
+        tests:
+          - not_null
+          - accepted_values:
+              values: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
+
+  - name: dim_customers
+    description: "Customer dimension — business-ready"
+    columns:
+      - name: customer_id
+        tests:
+          - not_null
+          - unique
+      - name: signup_cohort
+        tests:
+          - not_null
+
+  - name: dim_sellers
+    description: "Seller dimension — business-ready"
+    columns:
+      - name: seller_id
+        tests:
+          - not_null
+          - unique
+      - name: commission_rate
+        tests:
+          - not_null
+
+  - name: dim_products
+    description: "Product dimension with margin calculations"
+    columns:
+      - name: product_id
+        tests:
+          - not_null
+          - unique
+      - name: price
+        tests:
+          - not_null
+      - name: gross_margin_pct
+        description: "Derived margin — should be between -100 and 100"
+        tests:
+          - not_null
+
+  - name: fact_orders
+    description: "Fact table — one row per order"
+    columns:
+      - name: order_id
+        tests:
+          - not_null
+          - unique
+      - name: customer_id
+        tests:
+          - not_null
+          - relationships:
+              to: ref('dim_customers')
+              field: customer_id
+              config:
+                severity: warn
+      - name: order_date
+        tests:
+          - not_null
+      - name: total_amount
+        tests:
+          - not_null:
+              config:
+                severity: warn
+
+  - name: fact_order_items
+    description: "Fact table — one row per product line in an order"
+    columns:
+      - name: order_item_id
+        tests:
+          - not_null
+          - unique
+      - name: order_id
+        tests:
+          - not_null
+      - name: product_id
+        tests:
+          - not_null
+          - relationships:
+              to: ref('dim_products')
+              field: product_id
+
+  - name: mart_gmv_daily
+    description: "Daily GMV aggregation — M-001 metric"
+    columns:
+      - name: order_date
+        tests:
+          - not_null
+      - name: gmv
+        description: "Should always be positive (cancelled/refunded excluded)"
+        tests:
+          - not_null
+      - name: order_count
+        tests:
+          - not_null
+
+  - name: mart_customer_ltv
+    description: "Customer lifetime value — M-030, M-040 metrics"
+    columns:
+      - name: customer_id
+        tests:
+          - not_null
+          - unique
+      - name: total_orders
+        tests:
+          - not_null
+      - name: lifetime_revenue
+        tests:
+          - not_null:
+              config:
+                severity: warn
+      - name: activity_status
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['active', 'at_risk', 'dormant', 'churned']
+
+  - name: mart_seller_health
+    description: "Seller performance — M-050 metric"
+    columns:
+      - name: seller_id
+        tests:
+          - not_null
+          - unique
+      - name: total_gmv
+        tests:
+          - not_null
+      - name: health_status
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['active', 'at_risk', 'churned']

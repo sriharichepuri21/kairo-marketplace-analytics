@@ -62,7 +62,7 @@ deduplicated AS (
     SELECT *,
         ROW_NUMBER() OVER (
             PARTITION BY customer_external_id
-            ORDER BY updated_at DESC
+            ORDER BY updated_at ASC
         ) AS _row_num
     FROM nulls_standardized
 )
