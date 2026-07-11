@@ -81,6 +81,7 @@ Streamlit Dashboards (4 interactive pages)
 
 ## 📁 Project Structure
 
+<pre>
 kairo-marketplace-analytics/
 ├── generator/                    # Synthetic data generator
 │   ├── entities/                 # Customer, Seller, Product, Order models
@@ -102,6 +103,8 @@ kairo-marketplace-analytics/
 ├── chaos_manifest/               # Change logs from chaos engine (gitignored)
 ├── warehouse/                    # DuckDB database (gitignored)
 └── docs/                         # Business context + screenshots
+</pre>
+````
 
 ---
 
