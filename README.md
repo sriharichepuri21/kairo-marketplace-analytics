@@ -2,9 +2,6 @@
 
 An end-to-end Business Intelligence Engineering project that simulates a mid-sized global e-commerce marketplace — from synthetic data generation through production-grade data quality issues, a medallion architecture cleaning pipeline, and interactive executive dashboards.
 
-**Built to demonstrate the full BIE workflow as practiced at companies like Amazon.**
-
----
 
 ## 🎯 What This Project Demonstrates
 
