@@ -261,48 +261,85 @@ def analyze_seller_concentration(conn) -> None:
     print(f"     Classic 80/20 pattern — seller retention is critical")
 
 
-def analyze_one_time_conversion_opportunity(conn) -> None:
-    """Can we convert one-time customers to repeat?"""
+def analyze_single_order_conversion_opportunity(conn) -> None:
+    """
+    Analyze customers who placed exactly one valid lifetime order.
 
-    print_header("ANALYSIS 7: One-Time Customer Conversion Opportunity")
+    This uses observed purchase behavior rather than the synthetic
+    low-frequency customer persona.
+    """
+
+    print_header(
+        "ANALYSIS 7: Single-Order Customer Conversion Opportunity"
+    )
 
     result = conn.execute("""
         SELECT
-            segment,
             activity_status,
             COUNT(*) AS customers,
-            ROUND(AVG(lifetime_revenue), 2) AS avg_ltv,
+            ROUND(AVG(lifetime_revenue), 2) AS avg_lifetime_spend,
             ROUND(AVG(total_orders), 1) AS avg_orders
         FROM main.mart_customer_ltv
-        WHERE segment = 'one_time'
-        GROUP BY segment, activity_status
+        WHERE total_orders = 1
+        GROUP BY activity_status
         ORDER BY customers DESC
     """).df()
 
-    print("\n  One-Time Customer Status:")
+    print("\n Single-Order Customer Status:")
     print(result.to_string(index=False))
 
-    total_one_time = result['customers'].sum()
-    avg_ltv_one_time = conn.execute("""
-        SELECT ROUND(AVG(lifetime_revenue), 2)
-        FROM main.mart_customer_ltv WHERE segment = 'one_time'
+    total_single_order = int(result["customers"].sum())
+
+    avg_single_order_spend = conn.execute("""
+        SELECT
+            ROUND(AVG(lifetime_revenue), 2)
+        FROM main.mart_customer_ltv
+        WHERE total_orders = 1
     """).fetchone()[0]
 
-    avg_ltv_regular = conn.execute("""
-        SELECT ROUND(AVG(lifetime_revenue), 2)
-        FROM main.mart_customer_ltv WHERE segment = 'regular'
+    avg_repeat_buyer_spend = conn.execute("""
+        SELECT
+            ROUND(AVG(lifetime_revenue), 2)
+        FROM main.mart_customer_ltv
+        WHERE total_orders >= 2
     """).fetchone()[0]
 
-    conversion_target = int(total_one_time * 0.10)
-    revenue_opportunity = conversion_target * (avg_ltv_regular - avg_ltv_one_time)
+    conversion_target = int(total_single_order * 0.10)
 
-    print(f"\n  📊 OPPORTUNITY:")
-    print(f"     Total one-time customers: {total_one_time:,}")
-    print(f"     Avg LTV (one-time): ${avg_ltv_one_time:,.2f}")
-    print(f"     Avg LTV (regular):  ${avg_ltv_regular:,.2f}")
-    print(f"     If we convert 10% ({conversion_target:,}) to regular:")
-    print(f"     Additional revenue: ${revenue_opportunity:,.0f}")
+    spend_difference = max(
+        0,
+        avg_repeat_buyer_spend - avg_single_order_spend,
+    )
 
+    illustrative_spend_opportunity = (
+        conversion_target * spend_difference
+    )
+
+    print("\n OPPORTUNITY:")
+    print(
+        f" Total customers with exactly one order: "
+        f"{total_single_order:,}"
+    )
+    print(
+        f" Avg lifetime spend — single-order customers: "
+        f"${avg_single_order_spend:,.2f}"
+    )
+    print(
+        f" Avg lifetime spend — repeat buyers: "
+        f"${avg_repeat_buyer_spend:,.2f}"
+    )
+    print(
+        f" Illustrative 10% conversion population: "
+        f"{conversion_target:,}"
+    )
+    print(
+        f" Illustrative customer-spend difference: "
+        f"${illustrative_spend_opportunity:,.0f}"
+    )
+    print(
+        " Note: this is a descriptive scenario, not a causal "
+        "revenue forecast."
+    )
 
 def analyze_monthly_seasonality(conn) -> None:
     """Understand the seasonal patterns for planning."""
@@ -419,7 +456,7 @@ def main() -> None:
     analyze_regional_performance(conn)
     analyze_category_profitability(conn)
     analyze_seller_concentration(conn)
-    analyze_one_time_conversion_opportunity(conn)
+    analyze_single_order_conversion_opportunity(conn)
     analyze_monthly_seasonality(conn)
     analyze_discount_effectiveness(conn)
     analyze_commission_revenue(conn)

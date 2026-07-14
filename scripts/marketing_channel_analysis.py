@@ -2,322 +2,828 @@
 Marketing Channel Quality Analysis
 
 Compares acquisition channels using equal 90-day observation windows
-so that customers who signed up at different times are fairly compared.
+so customers who signed up at different times are fairly compared.
 
-Key question: Which channels bring customers who buy repeatedly
-vs customers who buy once and disappear?
+Key question:
+Which channels bring customers who buy repeatedly versus customers
+who buy once and disappear?
 
-NOTE: This is correlation, not causation. We cannot conclude that a
-channel CAUSES better retention — only that it is ASSOCIATED with it.
-Causal claims require experimental data (A/B tests).
+Important:
+This analysis measures correlation, not causation. We cannot conclude
+that a channel causes better retention. Causal claims require experiments,
+marketing-spend data, and reliable campaign attribution.
 
-Usage: python scripts/marketing_channel_analysis.py
+Usage:
+    python scripts/marketing_channel_analysis.py
 """
 
 from pathlib import Path
+
 import duckdb
 
-DB_PATH = Path("warehouse/kairo.duckdb")
-ANALYSIS_AS_OF_DATE = "2025-12-31"
 
-# Only include customers who signed up early enough to have a full 90-day window
-# If as_of_date is 2025-12-31, last eligible signup is 2025-10-02
+# ----------------------------------------------------------------------
+# Configuration
+# ----------------------------------------------------------------------
+
+DB_PATH = Path("warehouse/kairo.duckdb")
+
+ANALYSIS_AS_OF_DATE = "2025-12-31"
+OBSERVATION_DAYS = 90
+
+# Customers must sign up by this date to receive a complete
+# 90-day observation window before the analysis date.
 SIGNUP_CUTOFF = "2025-10-02"
 
 
-def get_conn():
-    return duckdb.connect(str(DB_PATH), read_only=True)
+# ----------------------------------------------------------------------
+# Helpers
+# ----------------------------------------------------------------------
+
+def get_conn() -> duckdb.DuckDBPyConnection:
+    """Open the Kairo DuckDB warehouse in read-only mode."""
+
+    if not DB_PATH.exists():
+        raise FileNotFoundError(
+            f"Database not found at: {DB_PATH}\n"
+            "Generate the data and run the dbt pipeline first."
+        )
+
+    conn = duckdb.connect(str(DB_PATH), read_only=True)
+
+    # Reduces memory requirements for large analytical queries.
+    conn.execute("SET preserve_insertion_order = false")
+    conn.execute("SET threads = 4")
+
+    return conn
 
 
-def print_header(title):
+def print_header(title: str) -> None:
+    """Print a consistent section header."""
+
     print("\n" + "=" * 70)
     print(f"  {title}")
     print("=" * 70)
 
 
-def main():
+def exclude_unknown_channels(dataframe):
+    """
+    Remove the unknown channel from channel ranking calculations.
+
+    Unknown records are still displayed in the analysis but should not
+    be treated as a legitimate acquisition channel.
+    """
+
+    if dataframe.empty:
+        return dataframe
+
+    return dataframe[
+        dataframe["signup_channel"].fillna("unknown") != "unknown"
+    ].copy()
+
+
+# ----------------------------------------------------------------------
+# Main analysis
+# ----------------------------------------------------------------------
+
+def main() -> None:
     conn = get_conn()
-    conn.execute("SET preserve_insertion_order = false")
 
-    print("\n" + "=" * 70)
-    print("  MARKETING CHANNEL QUALITY ANALYSIS")
-    print(f"  Observation window: 90 days from each customer's signup")
-    print(f"  Analysis as-of date: {ANALYSIS_AS_OF_DATE}")
-    print(f"  Eligible signups: before {SIGNUP_CUTOFF}")
-    print("=" * 70)
+    try:
+        print("\n" + "=" * 70)
+        print("  MARKETING CHANNEL QUALITY ANALYSIS")
+        print(f"  Observation window: {OBSERVATION_DAYS} days from signup")
+        print(f"  Analysis as-of date: {ANALYSIS_AS_OF_DATE}")
+        print(f"  Eligible signups: on or before {SIGNUP_CUTOFF}")
+        print("=" * 70)
 
-    # ── Analysis 1: Channel-level summary with 90-day windows ──
+        # ==============================================================
+        # 1. Channel quality using equal 90-day observation windows
+        # ==============================================================
 
-    print_header("1. CHANNEL QUALITY — 90-DAY OBSERVATION WINDOW")
+        print_header("1. CHANNEL QUALITY — 90-DAY OBSERVATION WINDOW")
 
-    channel_summary = conn.execute(f"""
-        WITH customer_orders AS (
+        channel_summary = conn.execute(
+            f"""
+            WITH eligible_customers AS (
+                SELECT
+                    customer_id,
+                    COALESCE(signup_channel, 'unknown') AS signup_channel,
+                    signup_date,
+                    segment
+                FROM main.dim_customers
+                WHERE signup_date <= DATE '{SIGNUP_CUTOFF}'
+            ),
+
+            customer_orders AS (
+                SELECT
+                    c.customer_id,
+                    c.signup_channel,
+                    c.signup_date,
+                    c.segment,
+                    o.order_id,
+                    o.total_amount,
+                    o.order_date
+
+                FROM eligible_customers AS c
+
+                LEFT JOIN main.fact_orders AS o
+                    ON c.customer_id = o.customer_id
+                    AND o.order_status NOT IN ('cancelled', 'refunded')
+                    AND o.order_date >= c.signup_date
+                    AND o.order_date
+                        <= c.signup_date + INTERVAL '{OBSERVATION_DAYS} days'
+                    AND o.order_date <= DATE '{ANALYSIS_AS_OF_DATE}'
+            ),
+
+            customer_90d AS (
+                SELECT
+                    customer_id,
+                    signup_channel,
+                    segment,
+
+                    COUNT(DISTINCT order_id) AS orders_90d,
+
+                    COALESCE(
+                        SUM(total_amount),
+                        0
+                    ) AS spend_90d
+
+                FROM customer_orders
+
+                GROUP BY
+                    customer_id,
+                    signup_channel,
+                    segment
+            )
+
             SELECT
-                c.customer_id,
-                c.signup_channel,
-                c.signup_date,
-                c.segment,
-                o.order_id,
-                o.total_amount,
-                o.order_date,
-                DATEDIFF('day', c.signup_date, o.order_date) AS days_since_signup
-            FROM main.dim_customers c
-            LEFT JOIN main.fact_orders o
-                ON c.customer_id = o.customer_id
-                AND o.order_status NOT IN ('cancelled', 'refunded')
-                AND o.order_date <= c.signup_date + INTERVAL '90 days'
-            WHERE c.signup_date <= DATE '{SIGNUP_CUTOFF}'
-        ),
-
-        customer_90d AS (
-            SELECT
-                customer_id,
                 signup_channel,
-                segment,
-                COUNT(DISTINCT order_id) AS orders_90d,
-                COALESCE(SUM(total_amount), 0) AS spend_90d
-            FROM customer_orders
-            GROUP BY customer_id, signup_channel, segment
+
+                COUNT(*) AS customers,
+
+                ROUND(
+                    100.0 * COUNT(*)
+                    / SUM(COUNT(*)) OVER (),
+                    1
+                ) AS pct_of_total,
+
+                ROUND(
+                    AVG(spend_90d),
+                    2
+                ) AS avg_spend_90d,
+
+                ROUND(
+                    MEDIAN(spend_90d),
+                    2
+                ) AS median_spend_90d,
+
+                ROUND(
+                    AVG(orders_90d),
+                    1
+                ) AS avg_orders_90d,
+
+                ROUND(
+                    100.0
+                    * SUM(
+                        CASE
+                            WHEN orders_90d = 0 THEN 1
+                            ELSE 0
+                        END
+                    )
+                    / COUNT(*),
+                    1
+                ) AS no_order_within_90d_pct,
+
+                ROUND(
+                    100.0
+                    * SUM(
+                        CASE
+                            WHEN orders_90d = 1 THEN 1
+                            ELSE 0
+                        END
+                    )
+                    / COUNT(*),
+                    1
+                ) AS one_order_within_90d_pct,
+
+                ROUND(
+                    100.0
+                    * SUM(
+                        CASE
+                            WHEN orders_90d >= 2 THEN 1
+                            ELSE 0
+                        END
+                    )
+                    / COUNT(*),
+                    1
+                ) AS repeat_within_90d_pct,
+
+                ROUND(
+                    100.0
+                    * SUM(
+                        CASE
+                            WHEN segment = 'whale' THEN 1
+                            ELSE 0
+                        END
+                    )
+                    / COUNT(*),
+                    1
+                ) AS synthetic_whale_persona_pct
+
+            FROM customer_90d
+
+            GROUP BY signup_channel
+
+            ORDER BY
+                avg_spend_90d DESC,
+                signup_channel
+            """
+        ).df()
+
+        if channel_summary.empty:
+            print("  No eligible customer data was found.")
+        else:
+            print(channel_summary.to_string(index=False))
+
+            ranked_channels = exclude_unknown_channels(channel_summary)
+
+            if not ranked_channels.empty:
+                best_channel = ranked_channels.iloc[0]
+                worst_channel = ranked_channels.iloc[-1]
+
+                worst_spend = float(worst_channel["avg_spend_90d"])
+                best_spend = float(best_channel["avg_spend_90d"])
+
+                spend_ratio = (
+                    best_spend / worst_spend
+                    if worst_spend > 0
+                    else 0
+                )
+
+                print("\n  KEY FINDINGS:")
+                print(
+                    "     Highest average 90-day spend: "
+                    f"{best_channel['signup_channel']} "
+                    f"(${best_spend:,.2f})"
+                )
+                print(
+                    "     Lowest average 90-day spend:  "
+                    f"{worst_channel['signup_channel']} "
+                    f"(${worst_spend:,.2f})"
+                )
+                print(f"     Spend ratio: {spend_ratio:.2f}x")
+
+        # ==============================================================
+        # 2. Synthetic whale-persona distribution
+        # ==============================================================
+
+        print_header("2. SYNTHETIC WHALE PERSONA DISTRIBUTION BY CHANNEL")
+
+        whale_analysis = conn.execute(
+            f"""
+            SELECT
+                COALESCE(
+                    signup_channel,
+                    'unknown'
+                ) AS signup_channel,
+
+                COUNT(*) AS total_customers,
+
+                SUM(
+                    CASE
+                        WHEN segment = 'whale' THEN 1
+                        ELSE 0
+                    END
+                ) AS whale_persona_count,
+
+                ROUND(
+                    100.0
+                    * SUM(
+                        CASE
+                            WHEN segment = 'whale' THEN 1
+                            ELSE 0
+                        END
+                    )
+                    / COUNT(*),
+                    2
+                ) AS whale_persona_pct,
+
+                ROUND(
+                    1000.0
+                    * SUM(
+                        CASE
+                            WHEN segment = 'whale' THEN 1
+                            ELSE 0
+                        END
+                    )
+                    / COUNT(*),
+                    1
+                ) AS whale_personas_per_1000_signups
+
+            FROM main.dim_customers
+
+            WHERE signup_date <= DATE '{SIGNUP_CUTOFF}'
+
+            GROUP BY
+                COALESCE(signup_channel, 'unknown')
+
+            ORDER BY
+                whale_persona_pct DESC,
+                signup_channel
+            """
+        ).df()
+
+        if whale_analysis.empty:
+            print("  No whale-persona data was found.")
+        else:
+            print(whale_analysis.to_string(index=False))
+
+        # ==============================================================
+        # 3. Lifetime purchase behavior by channel
+        # ==============================================================
+
+        print_header("3. LIFETIME PURCHASE BEHAVIOR BY CHANNEL")
+
+        purchase_behavior = conn.execute(
+            f"""
+            WITH customer_order_counts AS (
+                SELECT
+                    c.customer_id,
+
+                    COALESCE(
+                        c.signup_channel,
+                        'unknown'
+                    ) AS signup_channel,
+
+                    COUNT(
+                        DISTINCT o.order_id
+                    ) AS lifetime_orders
+
+                FROM main.dim_customers AS c
+
+                LEFT JOIN main.fact_orders AS o
+                    ON c.customer_id = o.customer_id
+                    AND o.order_status NOT IN ('cancelled', 'refunded')
+                    AND o.order_date <= DATE '{ANALYSIS_AS_OF_DATE}'
+
+                WHERE c.signup_date <= DATE '{SIGNUP_CUTOFF}'
+
+                GROUP BY
+                    c.customer_id,
+                    COALESCE(c.signup_channel, 'unknown')
+            )
+
+            SELECT
+                signup_channel,
+
+                COUNT(*) AS total_customers,
+
+                SUM(
+                    CASE
+                        WHEN lifetime_orders = 0 THEN 1
+                        ELSE 0
+                    END
+                ) AS never_ordered_lifetime,
+
+                SUM(
+                    CASE
+                        WHEN lifetime_orders = 1 THEN 1
+                        ELSE 0
+                    END
+                ) AS one_order_only_lifetime,
+
+                SUM(
+                    CASE
+                        WHEN lifetime_orders >= 2 THEN 1
+                        ELSE 0
+                    END
+                ) AS repeat_buyers_lifetime,
+
+                ROUND(
+                    100.0
+                    * SUM(
+                        CASE
+                            WHEN lifetime_orders = 1 THEN 1
+                            ELSE 0
+                        END
+                    )
+                    / NULLIF(
+                        SUM(
+                            CASE
+                                WHEN lifetime_orders >= 1 THEN 1
+                                ELSE 0
+                            END
+                        ),
+                        0
+                    ),
+                    1
+                ) AS one_order_rate_among_buyers
+
+            FROM customer_order_counts
+
+            GROUP BY signup_channel
+
+            ORDER BY
+                one_order_rate_among_buyers DESC,
+                signup_channel
+            """
+        ).df()
+
+        if purchase_behavior.empty:
+            print("  No lifetime purchase-behavior data was found.")
+        else:
+            print(purchase_behavior.to_string(index=False))
+
+        # ==============================================================
+        # 4. First-purchase category by channel
+        # ==============================================================
+
+        print_header("4. WHAT DO CUSTOMERS BUY FIRST? (BY CHANNEL)")
+
+        first_purchase = conn.execute(
+            f"""
+            WITH ranked_orders AS (
+                SELECT
+                    o.customer_id,
+
+                    COALESCE(
+                        c.signup_channel,
+                        'unknown'
+                    ) AS signup_channel,
+
+                    o.order_id,
+                    o.order_date,
+
+                    ROW_NUMBER() OVER (
+                        PARTITION BY o.customer_id
+                        ORDER BY
+                            o.order_date ASC,
+                            o.order_id ASC
+                    ) AS order_rank
+
+                FROM main.fact_orders AS o
+
+                INNER JOIN main.dim_customers AS c
+                    ON o.customer_id = c.customer_id
+
+                WHERE o.order_status NOT IN ('cancelled', 'refunded')
+                  AND o.order_date <= DATE '{ANALYSIS_AS_OF_DATE}'
+                  AND c.signup_date <= DATE '{SIGNUP_CUTOFF}'
+            ),
+
+            first_orders AS (
+                SELECT
+                    customer_id,
+                    signup_channel,
+                    order_id,
+                    order_date
+
+                FROM ranked_orders
+
+                WHERE order_rank = 1
+            ),
+
+            ranked_first_order_items AS (
+                SELECT
+                    fo.customer_id,
+                    fo.signup_channel,
+                    fo.order_id,
+                    oi.order_item_id,
+                    oi.category,
+
+                    (
+                        COALESCE(oi.unit_price, 0)
+                        * COALESCE(oi.quantity, 0)
+                        - COALESCE(oi.discount_amount, 0)
+                    ) AS net_item_value,
+
+                    ROW_NUMBER() OVER (
+                        PARTITION BY fo.customer_id
+                        ORDER BY
+                            (
+                                COALESCE(oi.unit_price, 0)
+                                * COALESCE(oi.quantity, 0)
+                                - COALESCE(oi.discount_amount, 0)
+                            ) DESC,
+                            oi.order_item_id ASC
+                    ) AS item_rank
+
+                FROM first_orders AS fo
+
+                INNER JOIN main.fact_order_items AS oi
+                    ON fo.order_id = oi.order_id
+
+                WHERE COALESCE(oi.quantity, 0) > 0
+                  AND oi.unit_price IS NOT NULL
+                  AND oi.category IS NOT NULL
+            ),
+
+            primary_first_purchase AS (
+                SELECT
+                    customer_id,
+                    signup_channel,
+                    category
+
+                FROM ranked_first_order_items
+
+                WHERE item_rank = 1
+            ),
+
+            category_summary AS (
+                SELECT
+                    signup_channel,
+                    category,
+                    COUNT(*) AS customers
+
+                FROM primary_first_purchase
+
+                GROUP BY
+                    signup_channel,
+                    category
+            )
+
+            SELECT
+                signup_channel,
+                category AS first_purchase_category,
+                customers,
+
+                ROUND(
+                    100.0
+                    * customers
+                    / SUM(customers) OVER (
+                        PARTITION BY signup_channel
+                    ),
+                    1
+                ) AS pct_of_channel_customers
+
+            FROM category_summary
+
+            ORDER BY
+                signup_channel,
+                customers DESC,
+                first_purchase_category
+            """
+        ).df()
+
+        if first_purchase.empty:
+            print("  No first-purchase data was found.")
+            print("  Check order_id relationships between facts.")
+        else:
+            channels = first_purchase["signup_channel"].unique()
+
+            for channel in channels:
+                channel_data = (
+                    first_purchase[
+                        first_purchase["signup_channel"] == channel
+                    ]
+                    .head(3)
+                )
+
+                print(f"\n  {channel}:")
+
+                for _, row in channel_data.iterrows():
+                    print(
+                        f"    {row['first_purchase_category']}: "
+                        f"{int(row['customers']):,} customers "
+                        f"({row['pct_of_channel_customers']}%)"
+                    )
+
+        # ==============================================================
+        # 5. Repeat purchase within 90 days of first order
+        # ==============================================================
+
+        print_header(
+            "5. 90-DAY REPEAT RATE FROM FIRST ORDER BY CHANNEL"
         )
 
-        SELECT
-            signup_channel,
-            COUNT(*) AS customers,
-            ROUND(100.0 * COUNT(*) / SUM(COUNT(*)) OVER (), 1) AS pct_of_total,
+        repeat_90d = conn.execute(
+            f"""
+            WITH ranked_customer_orders AS (
+                SELECT
+                    c.customer_id,
 
-            -- Spend metrics (90-day window)
-            ROUND(AVG(spend_90d), 2) AS avg_spend_90d,
-            ROUND(MEDIAN(spend_90d), 2) AS median_spend_90d,
+                    COALESCE(
+                        c.signup_channel,
+                        'unknown'
+                    ) AS signup_channel,
 
-            -- Order metrics (90-day window)
-            ROUND(AVG(orders_90d), 1) AS avg_orders_90d,
+                    o.order_id,
+                    o.order_date,
 
-            -- Behavior rates
-            ROUND(100.0 * SUM(CASE WHEN orders_90d = 0 THEN 1 ELSE 0 END)
-                / COUNT(*), 1) AS never_ordered_pct,
-            ROUND(100.0 * SUM(CASE WHEN orders_90d = 1 THEN 1 ELSE 0 END)
-                / COUNT(*), 1) AS one_order_pct,
-            ROUND(100.0 * SUM(CASE WHEN orders_90d >= 2 THEN 1 ELSE 0 END)
-                / COUNT(*), 1) AS repeat_pct,
+                    ROW_NUMBER() OVER (
+                        PARTITION BY c.customer_id
+                        ORDER BY
+                            o.order_date ASC,
+                            o.order_id ASC
+                    ) AS order_rank
 
-            -- Whale rate
-            ROUND(100.0 * SUM(CASE WHEN segment = 'whale' THEN 1 ELSE 0 END)
-                / COUNT(*), 1) AS whale_pct
+                FROM main.dim_customers AS c
 
-        FROM customer_90d
-        GROUP BY signup_channel
-        ORDER BY avg_spend_90d DESC
-    """).df()
+                INNER JOIN main.fact_orders AS o
+                    ON c.customer_id = o.customer_id
 
-    print(channel_summary.to_string(index=False))
+                WHERE c.signup_date <= DATE '{SIGNUP_CUTOFF}'
+                  AND o.order_status NOT IN ('cancelled', 'refunded')
+                  AND o.order_date <= DATE '{ANALYSIS_AS_OF_DATE}'
+            ),
 
-    # Key findings
-    best_channel = channel_summary.iloc[0]
-    worst_channel = channel_summary.iloc[-1]
-    print(f"\n  📊 KEY FINDINGS:")
-    print(f"     Highest avg 90-day spend: {best_channel['signup_channel']} (${best_channel['avg_spend_90d']:,.2f})")
-    print(f"     Lowest avg 90-day spend:  {worst_channel['signup_channel']} (${worst_channel['avg_spend_90d']:,.2f})")
-    spend_ratio = best_channel['avg_spend_90d'] / worst_channel['avg_spend_90d'] if worst_channel['avg_spend_90d'] > 0 else 0
-    print(f"     Ratio: {spend_ratio:.1f}x")
+            first_and_second_orders AS (
+                SELECT
+                    customer_id,
+                    signup_channel,
 
-    # ── Analysis 2: Which channels produce whales? ──
+                    MIN(
+                        CASE
+                            WHEN order_rank = 1 THEN order_date
+                        END
+                    ) AS first_order_date,
 
-    print_header("2. WHALE PRODUCTION BY CHANNEL")
+                    MIN(
+                        CASE
+                            WHEN order_rank = 2 THEN order_date
+                        END
+                    ) AS second_order_date
 
-    whale_analysis = conn.execute(f"""
-        SELECT
-            c.signup_channel,
-            COUNT(*) AS total_customers,
-            SUM(CASE WHEN c.segment = 'whale' THEN 1 ELSE 0 END) AS whale_count,
-            ROUND(100.0 * SUM(CASE WHEN c.segment = 'whale' THEN 1 ELSE 0 END)
-                / COUNT(*), 2) AS whale_pct,
-            ROUND(1000.0 * SUM(CASE WHEN c.segment = 'whale' THEN 1 ELSE 0 END)
-                / COUNT(*), 1) AS whales_per_1000_signups
-        FROM main.dim_customers c
-        WHERE c.signup_date <= DATE '{SIGNUP_CUTOFF}'
-        GROUP BY c.signup_channel
-        ORDER BY whale_pct DESC
-    """).df()
+                FROM ranked_customer_orders
 
-    print(whale_analysis.to_string(index=False))
+                GROUP BY
+                    customer_id,
+                    signup_channel
+            )
 
-    # ── Analysis 3: One-order customer distribution by channel ──
-
-    print_header("3. SINGLE-ORDER CUSTOMERS BY CHANNEL")
-
-    single_order = conn.execute(f"""
-        WITH customer_order_counts AS (
             SELECT
-                c.customer_id,
-                c.signup_channel,
-                COUNT(DISTINCT o.order_id) AS total_orders
-            FROM main.dim_customers c
-            LEFT JOIN main.fact_orders o
-                ON c.customer_id = o.customer_id
-                AND o.order_status NOT IN ('cancelled', 'refunded')
-            WHERE c.signup_date <= DATE '{SIGNUP_CUTOFF}'
-            GROUP BY c.customer_id, c.signup_channel
-        )
+                signup_channel,
 
-        SELECT
-            signup_channel,
-            COUNT(*) AS total_customers,
-            SUM(CASE WHEN total_orders = 0 THEN 1 ELSE 0 END) AS never_ordered,
-            SUM(CASE WHEN total_orders = 1 THEN 1 ELSE 0 END) AS one_order_only,
-            SUM(CASE WHEN total_orders >= 2 THEN 1 ELSE 0 END) AS repeat_buyers,
-            ROUND(100.0 * SUM(CASE WHEN total_orders = 1 THEN 1 ELSE 0 END)
-                / NULLIF(SUM(CASE WHEN total_orders >= 1 THEN 1 ELSE 0 END), 0), 1)
-                AS one_order_rate_of_buyers
-        FROM customer_order_counts
-        GROUP BY signup_channel
-        ORDER BY one_order_rate_of_buyers DESC
-    """).df()
+                COUNT(*) AS customers_with_first_order,
 
-    print(single_order.to_string(index=False))
+                SUM(
+                    CASE
+                        WHEN second_order_date IS NOT NULL
+                         AND second_order_date
+                             <= first_order_date
+                                + INTERVAL '{OBSERVATION_DAYS} days'
+                        THEN 1
+                        ELSE 0
+                    END
+                ) AS returned_within_90d,
 
-    # ── Analysis 4: First purchase category by channel ──
+                ROUND(
+                    100.0
+                    * SUM(
+                        CASE
+                            WHEN second_order_date IS NOT NULL
+                             AND second_order_date
+                                 <= first_order_date
+                                    + INTERVAL '{OBSERVATION_DAYS} days'
+                            THEN 1
+                            ELSE 0
+                        END
+                    )
+                    / COUNT(*),
+                    1
+                ) AS repeat_rate_90d,
 
-    print_header("4. WHAT DO CUSTOMERS BUY FIRST? (by channel)")
+                ROUND(
+                    AVG(
+                        CASE
+                            WHEN second_order_date IS NOT NULL
+                             AND second_order_date
+                                 <= first_order_date
+                                    + INTERVAL '{OBSERVATION_DAYS} days'
+                            THEN DATEDIFF(
+                                'day',
+                                first_order_date,
+                                second_order_date
+                            )
+                        END
+                    ),
+                    1
+                ) AS avg_days_to_second_order
 
-    first_purchase = conn.execute(f"""
-        WITH first_orders AS (
-            SELECT
-                o.customer_id,
-                c.signup_channel,
-                o.order_date,
-                ROW_NUMBER() OVER (
-                    PARTITION BY o.customer_id
-                    ORDER BY o.order_date ASC, o.order_id ASC
-                ) AS order_rank
-            FROM main.fact_orders o
-            JOIN main.dim_customers c ON o.customer_id = c.customer_id
-            WHERE o.order_status NOT IN ('cancelled', 'refunded')
-              AND c.signup_date <= DATE '{SIGNUP_CUTOFF}'
-        ),
+            FROM first_and_second_orders
 
-        first_order_items AS (
-            SELECT
-                fo.customer_id,
-                fo.signup_channel,
-                oi.category,
-                ROW_NUMBER() OVER (
-                    PARTITION BY fo.customer_id
-                    ORDER BY oi.line_total DESC
-                ) AS item_rank
-            FROM first_orders fo
-            JOIN main.fact_order_items oi ON fo.customer_id = oi.order_id
-            WHERE fo.order_rank = 1
-        )
+            WHERE first_order_date IS NOT NULL
+              AND first_order_date
+                    <= DATE '{ANALYSIS_AS_OF_DATE}'
+                        - INTERVAL '{OBSERVATION_DAYS} days'
 
-        SELECT
-            signup_channel,
-            category,
-            COUNT(*) AS customers,
-            ROUND(100.0 * COUNT(*) / SUM(COUNT(*)) OVER (PARTITION BY signup_channel), 1)
-                AS pct_of_channel
-        FROM first_order_items
-        WHERE item_rank = 1
-        GROUP BY signup_channel, category
-        ORDER BY signup_channel, customers DESC
-    """).df()
+            GROUP BY signup_channel
 
-    if len(first_purchase) > 0:
-        # Show top 3 categories per channel
-        for channel in first_purchase['signup_channel'].unique():
-            channel_data = first_purchase[first_purchase['signup_channel'] == channel].head(3)
-            print(f"\n  {channel}:")
-            for _, row in channel_data.iterrows():
-                print(f"    {row['category']}: {row['customers']:,} ({row['pct_of_channel']}%)")
-    else:
-        print("  No first-purchase data available (possible join issue)")
+            ORDER BY
+                repeat_rate_90d DESC,
+                signup_channel
+            """
+        ).df()
 
-    # ── Analysis 5: 90-day repeat rate by channel ──
+        if repeat_90d.empty:
+            print("  No repeat-purchase data was found.")
+        else:
+            print(repeat_90d.to_string(index=False))
 
-    print_header("5. 90-DAY REPEAT RATE BY CHANNEL (fairest comparison)")
+            ranked_repeat = exclude_unknown_channels(repeat_90d)
 
-    repeat_90d = conn.execute(f"""
-        WITH customer_first_order AS (
-            SELECT
-                c.customer_id,
-                c.signup_channel,
-                MIN(o.order_date) AS first_order_date
-            FROM main.dim_customers c
-            JOIN main.fact_orders o
-                ON c.customer_id = o.customer_id
-                AND o.order_status NOT IN ('cancelled', 'refunded')
-            WHERE c.signup_date <= DATE '{SIGNUP_CUTOFF}'
-            GROUP BY c.customer_id, c.signup_channel
-        ),
+            if not ranked_repeat.empty:
+                best_repeat = ranked_repeat.iloc[0]
+                worst_repeat = ranked_repeat.iloc[-1]
 
-        customer_second_order AS (
-            SELECT
-                cfo.customer_id,
-                cfo.signup_channel,
-                cfo.first_order_date,
-                MIN(o.order_date) AS second_order_date
-            FROM customer_first_order cfo
-            JOIN main.fact_orders o
-                ON cfo.customer_id = o.customer_id
-                AND o.order_date > cfo.first_order_date
-                AND o.order_date <= cfo.first_order_date + INTERVAL '90 days'
-                AND o.order_status NOT IN ('cancelled', 'refunded')
-            GROUP BY cfo.customer_id, cfo.signup_channel, cfo.first_order_date
-        )
+                repeat_gap = (
+                    float(best_repeat["repeat_rate_90d"])
+                    - float(worst_repeat["repeat_rate_90d"])
+                )
 
-        SELECT
-            cfo.signup_channel,
-            COUNT(DISTINCT cfo.customer_id) AS customers_with_first_order,
-            COUNT(DISTINCT cso.customer_id) AS returned_within_90d,
-            ROUND(100.0 * COUNT(DISTINCT cso.customer_id)
-                / COUNT(DISTINCT cfo.customer_id), 1) AS repeat_rate_90d,
-            ROUND(AVG(DATEDIFF('day', cfo.first_order_date,
-                cso.second_order_date)), 1) AS avg_days_to_second_order
-        FROM customer_first_order cfo
-        LEFT JOIN customer_second_order cso
-            ON cfo.customer_id = cso.customer_id
-        GROUP BY cfo.signup_channel
-        ORDER BY repeat_rate_90d DESC
-    """).df()
+                print("\n  KEY FINDINGS:")
+                print(
+                    "     Highest 90-day repeat rate: "
+                    f"{best_repeat['signup_channel']} "
+                    f"({best_repeat['repeat_rate_90d']}%)"
+                )
+                print(
+                    "     Lowest 90-day repeat rate:  "
+                    f"{worst_repeat['signup_channel']} "
+                    f"({worst_repeat['repeat_rate_90d']}%)"
+                )
+                print(f"     Difference: {repeat_gap:.1f} percentage points")
 
-    print(repeat_90d.to_string(index=False))
+        # ==============================================================
+        # Summary
+        # ==============================================================
 
-    best_repeat = repeat_90d.iloc[0]
-    worst_repeat = repeat_90d.iloc[-1]
-    print(f"\n  📊 KEY FINDING:")
-    print(f"     Highest 90-day repeat: {best_repeat['signup_channel']} ({best_repeat['repeat_rate_90d']}%)")
-    print(f"     Lowest 90-day repeat:  {worst_repeat['signup_channel']} ({worst_repeat['repeat_rate_90d']}%)")
-    print(f"     Gap: {best_repeat['repeat_rate_90d'] - worst_repeat['repeat_rate_90d']}pp")
+        print_header("SUMMARY & CONCLUSIONS")
 
-    # ── Summary ──
+        named_summary = exclude_unknown_channels(channel_summary)
+        named_repeat = exclude_unknown_channels(repeat_90d)
 
-    print_header("SUMMARY & CONCLUSIONS")
+        if not named_summary.empty:
+            highest_spend = named_summary.iloc[0]
+            lowest_spend = named_summary.iloc[-1]
 
-    print("""
-  WHAT WE FOUND (correlation, not causation):
-  
-  [Findings will be filled after seeing the data]
+            print("\n  OBSERVED CHANNEL-QUALITY PATTERNS:")
+            print(
+                f"  - {highest_spend['signup_channel']} has the highest "
+                f"average 90-day customer spend "
+                f"(${highest_spend['avg_spend_90d']:,.2f})."
+            )
+            print(
+                f"  - {lowest_spend['signup_channel']} has the lowest "
+                f"average 90-day customer spend "
+                f"(${lowest_spend['avg_spend_90d']:,.2f})."
+            )
 
-  WHAT WE CANNOT CONCLUDE:
-  
-  - We cannot say any channel CAUSES better retention
-  - Referral customers may have higher spend because loyal people
-    are more likely to use referrals — not because referrals create loyalty
-  - We cannot recommend budget reallocation without spend data
-  - We cannot calculate ROI, CAC, or LTV:CAC without marketing spend
+        if not named_repeat.empty:
+            highest_repeat = named_repeat.iloc[0]
+            lowest_repeat = named_repeat.iloc[-1]
 
-  WHAT WOULD BE NEEDED FOR CAUSAL CLAIMS:
-  
-  - A/B test: randomly assign new visitors to different channels
-  - Marketing spend data by channel by month
-  - Attribution model connecting campaigns to signups
-  - Holdout experiments for each channel
+            print(
+                f"  - {highest_repeat['signup_channel']} has the highest "
+                f"90-day repeat rate "
+                f"({highest_repeat['repeat_rate_90d']}%)."
+            )
+            print(
+                f"  - {lowest_repeat['signup_channel']} has the lowest "
+                f"90-day repeat rate "
+                f"({lowest_repeat['repeat_rate_90d']}%)."
+            )
+
+        print(
+            """
+  INTERPRETATION:
+
+  - These are associations, not causal effects.
+  - The channel-to-segment relationship is an intentional synthetic
+    business assumption in the customer generator.
+  - Channel may be useful as a churn-model feature, but it should not
+    replace observed behavioral features such as recency, frequency,
+    spend, returns, and reviews.
+
+  WHAT THIS ANALYSIS CANNOT PROVE:
+
+  - It cannot prove that a channel causes better retention.
+  - It cannot calculate CAC, ROI, or LTV:CAC without marketing spend.
+  - It cannot justify a specific budget reallocation percentage.
+  - It cannot separate channel effects from customer-selection effects.
+
+  DATA NEEDED FOR STRONGER BUSINESS RECOMMENDATIONS:
+
+  - Marketing spend by channel and campaign
+  - Campaign attribution data
+  - Customer acquisition cost
+  - Promotional and referral-program costs
+  - Randomized holdout or A/B test results
 
   RECOMMENDED NEXT STEP:
-  
-  Use signup_channel as a FEATURE in the churn prediction model.
-  If it improves prediction accuracy, it's useful regardless of
-  whether the relationship is causal.
-    """)
+
+  Build the point-in-time churn dataset and compare:
+
+  1. A baseline churn model using behavioral features only
+  2. A model using behavioral features plus signup_channel
+
+  Keep signup_channel only if it improves out-of-sample prediction.
+            """
+        )
+
+    finally:
+        conn.close()
 
 
 if __name__ == "__main__":

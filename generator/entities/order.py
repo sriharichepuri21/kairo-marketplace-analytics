@@ -6,7 +6,7 @@ that powers every executive metric. OrderItems represent
 individual products within an order.
 
 Business rules:
-- Whale customers order 10-30x per year, one_time customers order once
+- Whale customers order frequently; low-frequency customers order infrequently
 - AOV varies by segment (whales spend more per order)
 - Q4 has +40% volume, Black Friday week has +150%
 - Items per order follows log-normal (median 2, long tail)
@@ -140,7 +140,7 @@ SEGMENT_ANNUAL_ORDERS: dict[str, tuple[int, int]] = {
     "whale": (15, 40),
     "regular": (3, 8),
     "bargain_hunter": (2, 6),
-    "one_time": (1, 1),
+    "low_frequency": (1, 2),
 }
 
 # Currency by region

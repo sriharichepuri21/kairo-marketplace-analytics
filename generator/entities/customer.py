@@ -38,13 +38,13 @@ class CustomerSegment(str, Enum):
     - whale:          top-tier buyers, high frequency, high AOV
     - regular:        the reliable middle of the distribution
     - bargain_hunter: price-sensitive, promo-driven
-    - one_time:       single-purchase customers who never returned
+    - low_frequency:  customers expected to purchase infrequently
     """
 
     WHALE = "whale"
     REGULAR = "regular"
     BARGAIN_HUNTER = "bargain_hunter"
-    ONE_TIME = "one_time"
+    LOW_FREQUENCY = "low_frequency"
 
 
 class AccountStatus(str, Enum):
@@ -115,11 +115,13 @@ SEGMENT_WEIGHTS: dict[CustomerSegment, float] = {
     CustomerSegment.WHALE: 0.05,
     CustomerSegment.REGULAR: 0.45,
     CustomerSegment.BARGAIN_HUNTER: 0.25,
-    CustomerSegment.ONE_TIME: 0.25,
+    CustomerSegment.LOW_FREQUENCY: 0.25,
 }
 
 # Signup channels — where the customer came from
 SIGNUP_CHANNELS = ["organic", "paid_search", "social", "referral", "email"]
+DATA_START_DATE = date(2023, 7, 9)
+DATA_END_DATE = date(2025, 12, 31)
 
 # Channel → segment weights — each channel attracts different customer types
 #
@@ -134,38 +136,38 @@ SIGNUP_CHANNELS = ["organic", "paid_search", "social", "referral", "email"]
 #                 Some become engaged, many don't return. Low whale rate (4%).
 #   Paid search:  Weakest customers. They clicked a Google ad while
 #                 price-comparing. Deal-seekers who buy once and leave.
-#                 Lowest whale rate (3%), highest one-time rate (32%).
+#                 Lowest whale rate (3%), highest low-frequency rate (32%).
 #
 CHANNEL_SEGMENT_WEIGHTS: dict[str, dict[CustomerSegment, float]] = {
     "organic": {
         CustomerSegment.WHALE: 0.08,
         CustomerSegment.REGULAR: 0.50,
         CustomerSegment.BARGAIN_HUNTER: 0.25,
-        CustomerSegment.ONE_TIME: 0.17,
+        CustomerSegment.LOW_FREQUENCY: 0.17,
     },
     "referral": {
         CustomerSegment.WHALE: 0.10,
         CustomerSegment.REGULAR: 0.55,
         CustomerSegment.BARGAIN_HUNTER: 0.20,
-        CustomerSegment.ONE_TIME: 0.15,
+        CustomerSegment.LOW_FREQUENCY: 0.15,
     },
     "paid_search": {
         CustomerSegment.WHALE: 0.03,
         CustomerSegment.REGULAR: 0.35,
         CustomerSegment.BARGAIN_HUNTER: 0.30,
-        CustomerSegment.ONE_TIME: 0.32,
+        CustomerSegment.LOW_FREQUENCY: 0.32,
     },
     "social": {
         CustomerSegment.WHALE: 0.04,
         CustomerSegment.REGULAR: 0.40,
         CustomerSegment.BARGAIN_HUNTER: 0.28,
-        CustomerSegment.ONE_TIME: 0.28,
+        CustomerSegment.LOW_FREQUENCY: 0.28,
     },
     "email": {
         CustomerSegment.WHALE: 0.06,
         CustomerSegment.REGULAR: 0.45,
         CustomerSegment.BARGAIN_HUNTER: 0.30,
-        CustomerSegment.ONE_TIME: 0.19,
+        CustomerSegment.LOW_FREQUENCY: 0.19,
     },
 }
 
@@ -219,8 +221,16 @@ def generate_customer(fake: Faker) -> Customer:
     email = f"{first_name.lower()}.{last_name.lower()}{fake.random_int(1, 9999)}@example.com"
 
     # Dates
-    signup_date = fake.date_between(start_date="-3y", end_date="today")
-    signup_dt = datetime.combine(signup_date, datetime.min.time())
+    # Generate signup dates only within the official dataset window
+    signup_date = fake.date_between_dates(
+        date_start=DATA_START_DATE,
+        date_end=DATA_END_DATE,
+    )
+
+    signup_dt = datetime.combine(
+    signup_date,
+    datetime.min.time(),
+    )
 
     return Customer(
         customer_id=str(uuid4()),
