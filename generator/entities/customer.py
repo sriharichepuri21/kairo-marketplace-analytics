@@ -3,6 +3,10 @@ Customer entity model and generator.
 
 This module defines the shape of a Kairo customer and produces
 synthetic customer records for the data platform.
+
+Key design decision: signup_channel CORRELATES with segment.
+Different acquisition channels attract different customer types.
+Referral brings the best customers. Paid search brings deal-seekers.
 """
 
 import random
@@ -104,7 +108,9 @@ REGION_COUNTRIES: dict[Region, list[tuple[str, float]]] = {
     Region.LATAM: [("BR", 0.50), ("MX", 0.30), ("AR", 0.10), ("CL", 0.05), ("CO", 0.05)],
 }
 
-# Segment distribution — reflects a realistic marketplace
+# Overall segment distribution — reflects a realistic marketplace
+# NOTE: This is the GLOBAL average. Actual per-customer segment is
+# determined by signup_channel via CHANNEL_SEGMENT_WEIGHTS below.
 SEGMENT_WEIGHTS: dict[CustomerSegment, float] = {
     CustomerSegment.WHALE: 0.05,
     CustomerSegment.REGULAR: 0.45,
@@ -114,6 +120,54 @@ SEGMENT_WEIGHTS: dict[CustomerSegment, float] = {
 
 # Signup channels — where the customer came from
 SIGNUP_CHANNELS = ["organic", "paid_search", "social", "referral", "email"]
+
+# Channel → segment weights — each channel attracts different customer types
+#
+# Business rationale:
+#   Referral:     Best customers. A friend recommended Kairo — they arrive
+#                 with trust and intent. Highest whale rate (10%).
+#   Organic:      Strong customers. They actively searched for Kairo —
+#                 high intent, good retention. Second-highest whale rate (8%).
+#   Email:        Good customers. They opted into marketing — already
+#                 engaged with the brand. Moderate whale rate (6%).
+#   Social:       Mixed quality. Impulse clicks from Instagram/TikTok.
+#                 Some become engaged, many don't return. Low whale rate (4%).
+#   Paid search:  Weakest customers. They clicked a Google ad while
+#                 price-comparing. Deal-seekers who buy once and leave.
+#                 Lowest whale rate (3%), highest one-time rate (32%).
+#
+CHANNEL_SEGMENT_WEIGHTS: dict[str, dict[CustomerSegment, float]] = {
+    "organic": {
+        CustomerSegment.WHALE: 0.08,
+        CustomerSegment.REGULAR: 0.50,
+        CustomerSegment.BARGAIN_HUNTER: 0.25,
+        CustomerSegment.ONE_TIME: 0.17,
+    },
+    "referral": {
+        CustomerSegment.WHALE: 0.10,
+        CustomerSegment.REGULAR: 0.55,
+        CustomerSegment.BARGAIN_HUNTER: 0.20,
+        CustomerSegment.ONE_TIME: 0.15,
+    },
+    "paid_search": {
+        CustomerSegment.WHALE: 0.03,
+        CustomerSegment.REGULAR: 0.35,
+        CustomerSegment.BARGAIN_HUNTER: 0.30,
+        CustomerSegment.ONE_TIME: 0.32,
+    },
+    "social": {
+        CustomerSegment.WHALE: 0.04,
+        CustomerSegment.REGULAR: 0.40,
+        CustomerSegment.BARGAIN_HUNTER: 0.28,
+        CustomerSegment.ONE_TIME: 0.28,
+    },
+    "email": {
+        CustomerSegment.WHALE: 0.06,
+        CustomerSegment.REGULAR: 0.45,
+        CustomerSegment.BARGAIN_HUNTER: 0.30,
+        CustomerSegment.ONE_TIME: 0.19,
+    },
+}
 
 
 # ─────────────────────────────────────────────────────────
@@ -147,10 +201,15 @@ def generate_customer(fake: Faker) -> Customer:
     countries, country_weights = zip(*country_pool)
     country_code = random.choices(countries, weights=country_weights, k=1)[0]
 
-    # Pick segment using weighted distribution
+    # Pick channel first — this determines segment distribution
+    signup_channel = random.choices(SIGNUP_CHANNELS, k=1)[0]
+
+    # Pick segment using channel-specific weights
+    # Different channels attract different customer types
+    channel_weights = CHANNEL_SEGMENT_WEIGHTS[signup_channel]
     segment = random.choices(
-        list(SEGMENT_WEIGHTS.keys()),
-        weights=list(SEGMENT_WEIGHTS.values()),
+        list(channel_weights.keys()),
+        weights=list(channel_weights.values()),
         k=1,
     )[0]
 
@@ -173,7 +232,7 @@ def generate_customer(fake: Faker) -> Customer:
         country_code=country_code,
         segment=segment,
         signup_date=signup_date,
-        signup_channel=fake.random_element(SIGNUP_CHANNELS),
+        signup_channel=signup_channel,
         account_status=AccountStatus.ACTIVE,
         created_at=signup_dt,
         updated_at=signup_dt,
