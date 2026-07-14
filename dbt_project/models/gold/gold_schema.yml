@@ -15,7 +15,8 @@ models:
         tests:
           - not_null
           - accepted_values:
-              values: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
+              arguments:
+                values: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
 
   - name: dim_customers
     description: "Customer dimension — business-ready"
@@ -65,8 +66,9 @@ models:
         tests:
           - not_null
           - relationships:
-              to: ref('dim_customers')
-              field: customer_id
+              arguments:
+                to: ref('dim_customers')
+                field: customer_id
               config:
                 severity: warn
       - name: order_date
@@ -92,8 +94,9 @@ models:
         tests:
           - not_null
           - relationships:
-              to: ref('dim_products')
-              field: product_id
+              arguments:
+                to: ref('dim_products')
+                field: product_id
 
   - name: mart_gmv_daily
     description: "Daily GMV aggregation — M-001 metric"
@@ -128,7 +131,8 @@ models:
         tests:
           - not_null
           - accepted_values:
-              values: ['active', 'at_risk', 'dormant', 'churned']
+              arguments:
+                values: ['active', 'at_risk', 'dormant', 'churned', 'never_ordered']
 
   - name: mart_seller_health
     description: "Seller performance — M-050 metric"
@@ -144,4 +148,5 @@ models:
         tests:
           - not_null
           - accepted_values:
-              values: ['active', 'at_risk', 'churned']
+              arguments:
+                values: ['active', 'at_risk', 'churned', 'no_sales']

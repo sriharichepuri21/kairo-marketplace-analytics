@@ -22,3 +22,6 @@ models:
       +materialized: table
     gold:
       +materialized: table
+
+vars:
+  analysis_as_of_date: '2025-12-31'

@@ -1,11 +1,41 @@
 -- Gold: Fact orders
--- One row per order — the core business event table
--- Joins to dim_customers, dim_dates for analysis
+-- Grain: one row per order
+--
+-- Unmatched source customer IDs are mapped to the unknown-customer
+-- dimension member while the original source ID is preserved.
+
+WITH customer_lookup AS (
+
+    SELECT
+        customer_id,
+        segment,
+        signup_cohort,
+        country_code
+
+    FROM {{ ref('dim_customers') }}
+
+    WHERE is_unknown_customer = FALSE
+
+)
 
 SELECT
     o.order_id,
     o.order_number,
-    o.customer_id,
+
+    -- Conformed customer key
+    COALESCE(
+        c.customer_id,
+        '00000000-0000-0000-0000-000000000000'
+    ) AS customer_id,
+
+    -- Original customer ID retained for investigation
+    o.customer_id AS source_customer_id,
+
+    CASE
+        WHEN c.customer_id IS NULL THEN TRUE
+        ELSE FALSE
+    END AS is_unknown_customer,
+
     o.region,
     o.order_status,
     o.order_channel,
@@ -26,12 +56,14 @@ SELECT
     o._has_impossible_discount,
 
     -- Customer enrichment
-    c.segment AS customer_segment,
-    c.signup_cohort AS customer_signup_cohort,
-    c.country_code AS customer_country,
+    COALESCE(c.segment, 'unknown') AS customer_segment,
+    COALESCE(c.signup_cohort, 'unknown') AS customer_signup_cohort,
+    COALESCE(c.country_code, 'UNK') AS customer_country,
 
     o.created_at,
     o.updated_at
+
 FROM {{ ref('silver__orders') }} o
-LEFT JOIN {{ ref('dim_customers') }} c
+
+LEFT JOIN customer_lookup c
     ON o.customer_id = c.customer_id

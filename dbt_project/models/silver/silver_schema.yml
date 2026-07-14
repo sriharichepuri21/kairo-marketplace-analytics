@@ -17,17 +17,20 @@ models:
         tests:
           - not_null
           - accepted_values:
-              values: ['US', 'EU', 'LATAM']
+              arguments:
+                values: ['US', 'EU', 'LATAM']
       - name: segment
         tests:
           - not_null
           - accepted_values:
-              values: ['whale', 'regular', 'bargain_hunter', 'low_frequency']
+              arguments:
+                values: ['whale', 'regular', 'bargain_hunter', 'low_frequency']
       - name: account_status
         tests:
           - not_null
           - accepted_values:
-              values: ['active', 'suspended', 'closed']
+              arguments:
+                values: ['active', 'suspended', 'closed']
       - name: signup_date
         tests:
           - not_null
@@ -46,12 +49,14 @@ models:
         tests:
           - not_null
           - accepted_values:
-              values: ['placed', 'paid', 'shipped', 'in_transit', 'delivered', 'cancelled', 'refunded']
+              arguments:
+                values: ['placed', 'paid', 'shipped', 'in_transit', 'delivered', 'cancelled', 'refunded']
       - name: order_channel
         tests:
           - not_null
           - accepted_values:
-              values: ['web', 'mobile_app', 'marketplace_api']
+              arguments:
+                values: ['web', 'mobile_app', 'marketplace_api']
       - name: subtotal
         description: "Type drift fixed — cast from string back to numeric. ~0.2% unparseable values remain as NULL."
         tests:
@@ -109,12 +114,14 @@ models:
         tests:
           - not_null
           - accepted_values:
-              values: ['credit_card', 'debit_card', 'paypal', 'apple_pay', 'google_pay', 'bank_transfer']
+              arguments:
+                values: ['credit_card', 'debit_card', 'paypal', 'apple_pay', 'google_pay', 'bank_transfer']
       - name: payment_status
         tests:
           - not_null
           - accepted_values:
-              values: ['pending', 'authorized', 'captured', 'failed', 'refunded', 'chargeback']
+              arguments:
+                values: ['pending', 'authorized', 'captured', 'failed', 'refunded', 'chargeback']
       - name: amount
         tests:
           - not_null
@@ -133,7 +140,8 @@ models:
         tests:
           - not_null
           - accepted_values:
-              values: ['standard', 'express', 'next_day', 'same_day']
+              arguments:
+                values: ['standard', 'express', 'next_day', 'same_day']
 
   - name: silver__sellers
     description: "Sellers — clean passthrough"
@@ -170,4 +178,5 @@ models:
         tests:
           - not_null
           - accepted_values:
-              values: [1, 2, 3, 4, 5]
+              arguments:
+                values: [1, 2, 3, 4, 5]

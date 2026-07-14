@@ -113,6 +113,7 @@ def main() -> None:
                     segment
                 FROM main.dim_customers
                 WHERE signup_date <= DATE '{SIGNUP_CUTOFF}'
+                  AND is_unknown_customer = FALSE
             ),
 
             customer_orders AS (
@@ -324,6 +325,7 @@ def main() -> None:
             FROM main.dim_customers
 
             WHERE signup_date <= DATE '{SIGNUP_CUTOFF}'
+                  AND is_unknown_customer = FALSE
 
             GROUP BY
                 COALESCE(signup_channel, 'unknown')
@@ -368,6 +370,7 @@ def main() -> None:
                     AND o.order_date <= DATE '{ANALYSIS_AS_OF_DATE}'
 
                 WHERE c.signup_date <= DATE '{SIGNUP_CUTOFF}'
+                  AND c.is_unknown_customer = FALSE
 
                 GROUP BY
                     c.customer_id,
@@ -470,6 +473,7 @@ def main() -> None:
                 WHERE o.order_status NOT IN ('cancelled', 'refunded')
                   AND o.order_date <= DATE '{ANALYSIS_AS_OF_DATE}'
                   AND c.signup_date <= DATE '{SIGNUP_CUTOFF}'
+                  AND c.is_unknown_customer = FALSE
             ),
 
             first_orders AS (
@@ -624,6 +628,7 @@ def main() -> None:
                     ON c.customer_id = o.customer_id
 
                 WHERE c.signup_date <= DATE '{SIGNUP_CUTOFF}'
+                  AND c.is_unknown_customer = FALSE
                   AND o.order_status NOT IN ('cancelled', 'refunded')
                   AND o.order_date <= DATE '{ANALYSIS_AS_OF_DATE}'
             ),

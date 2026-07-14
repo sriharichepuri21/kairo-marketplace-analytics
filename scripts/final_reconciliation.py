@@ -1,165 +1,306 @@
 """
-Final Reconciliation: Is our $407M GMV actually tax-inclusive?
-If so, what's the real GMV and what changes?
+Final Governed Metric Audit
+
+Provides a concise final verification of the authoritative marketplace
+financial metrics after the dbt Gold layer has been built.
+
+Run:
+    python scripts/final_reconciliation.py
 """
 
+from decimal import Decimal
 from pathlib import Path
+
 import duckdb
 
-conn = duckdb.connect(str(Path("warehouse/kairo.duckdb")), read_only=True)
+
+DB_PATH = Path("warehouse/kairo.duckdb")
+
+
+def money(value) -> str:
+    """Format a numeric value as currency."""
+
+    if value is None:
+        value = Decimal("0")
+
+    return f"${Decimal(str(value)):,.2f}"
+
+
+def assert_equal(
+    label: str,
+    left,
+    right,
+    tolerance: Decimal = Decimal("0.01"),
+) -> None:
+    """Require two financial totals to reconcile."""
+
+    left_value = Decimal(str(left or 0))
+    right_value = Decimal(str(right or 0))
+    difference = left_value - right_value
+
+    if abs(difference) > tolerance:
+        raise AssertionError(
+            f"{label} failed: "
+            f"{money(left_value)} vs {money(right_value)}"
+        )
+
+    print(f"  PASS — {label}: {money(difference)} difference")
+
+
+if not DB_PATH.exists():
+    raise FileNotFoundError(
+        f"Database not found: {DB_PATH}\n"
+        "Generate the data and run dbt first."
+    )
+
+
+conn = duckdb.connect(str(DB_PATH), read_only=True)
 conn.execute("SET preserve_insertion_order = false")
+conn.execute("SET threads = 4")
 
 
-print("=" * 70)
-print("  FINAL METRIC RECONCILIATION")
-print("=" * 70)
+try:
+    print("\n" + "=" * 78)
+    print("  FINAL GOVERNED METRIC AUDIT")
+    print("=" * 78)
 
-# Step 1: Understand what line_total actually contains
-print("\n--- Step 1: What is line_total? ---")
+    # ------------------------------------------------------------------
+    # Marketplace GMV
+    # ------------------------------------------------------------------
 
-sample = conn.execute("""
-    SELECT
-        order_item_id,
-        ROUND(unit_price, 2) AS unit_price,
-        quantity,
-        ROUND(unit_price * quantity, 2) AS gross_merchandise,
-        ROUND(discount_amount, 2) AS discount,
-        ROUND(tax_amount, 2) AS tax,
-        ROUND(line_total, 2) AS line_total,
-        ROUND(unit_price * quantity - discount_amount + tax_amount, 2) AS reconstructed,
-        ROUND(line_total - (unit_price * quantity - discount_amount + tax_amount), 2) AS residual
-    FROM main.fact_order_items
-    WHERE quantity > 0
-      AND unit_price IS NOT NULL
-      AND line_total IS NOT NULL
-    LIMIT 10
-""").df()
-print(sample.to_string(index=False))
+    marketplace = conn.execute("""
+        SELECT
+            ROUND(SUM(gross_gmv), 2) AS gross_gmv,
+            ROUND(SUM(net_gmv), 2) AS net_gmv,
+            ROUND(SUM(total_discounts), 2) AS discounts,
+            ROUND(SUM(total_item_tax), 2) AS item_tax,
+            ROUND(SUM(gross_profit), 2) AS merchandise_profit,
+            SUM(invalid_gmv_item_count) AS invalid_items
+        FROM main.mart_gmv_daily
+    """).fetchone()
 
-print("\n  If residual ≈ 0, then line_total = (price × qty) - discount + tax")
-print("  That means our GMV includes tax — which is wrong for a GMV metric.")
+    gross_gmv = marketplace[0]
+    net_gmv = marketplace[1]
+    discounts = marketplace[2]
+    item_tax = marketplace[3]
+    merchandise_profit = marketplace[4]
+    invalid_items = marketplace[5]
 
+    print("\n  MARKETPLACE MERCHANDISE METRICS")
+    print(f"    Gross GMV:           {money(gross_gmv)}")
+    print(f"    Item discounts:      {money(discounts)}")
+    print(f"    Net GMV:             {money(net_gmv)}")
+    print(f"    Item tax:            {money(item_tax)}")
+    print(f"    Merchandise profit:  {money(merchandise_profit)}")
+    print(f"    Invalid item rows:   {invalid_items:,}")
 
-# Step 2: Calculate correct metrics
-print("\n--- Step 2: Correct Metric Calculations ---")
+    assert_equal(
+        "Gross GMV minus discounts equals Net GMV",
+        Decimal(str(gross_gmv)) - Decimal(str(discounts)),
+        net_gmv,
+    )
 
-metrics = conn.execute("""
-    SELECT
-        ROUND(SUM(line_total)) AS current_gmv_tax_inclusive,
-        ROUND(SUM(unit_price * quantity)) AS gross_merchandise_value,
-        ROUND(SUM(unit_price * quantity - COALESCE(discount_amount, 0))) AS net_merchandise_value,
-        ROUND(SUM(COALESCE(discount_amount, 0))) AS total_item_discounts,
-        ROUND(SUM(COALESCE(tax_amount, 0))) AS total_item_tax,
-        ROUND(SUM(unit_cost * quantity)) AS total_cogs
-    FROM main.fact_order_items
-    WHERE quantity > 0
-      AND unit_price IS NOT NULL
-      AND line_total > 0
-      AND order_status NOT IN ('cancelled', 'refunded')
-""").fetchone()
+    # ------------------------------------------------------------------
+    # Seller and commission metrics
+    # ------------------------------------------------------------------
 
-print(f"  Current GMV (line_total, tax-inclusive):  ${metrics[0]:,.0f}  ← what we've been reporting")
-print(f"  Gross Merchandise Value (price × qty):    ${metrics[1]:,.0f}  ← before any discounts")
-print(f"  Net Merchandise Value (gross - discount): ${metrics[2]:,.0f}  ← after discounts")
-print(f"  Total Item Discounts:                     ${metrics[3]:,.0f}")
-print(f"  Total Item Tax:                           ${metrics[4]:,.0f}")
-print(f"  Total COGS:                               ${metrics[5]:,.0f}")
+    seller = conn.execute("""
+        SELECT
+            ROUND(SUM(gross_gmv), 2) AS gross_gmv,
+            ROUND(SUM(net_gmv), 2) AS net_gmv,
+            ROUND(SUM(commission_revenue), 2)
+                AS commission_revenue,
 
-# Step 3: Recalculate margins
-print("\n--- Step 3: Corrected Margins ---")
+            ROUND(
+                100.0 * SUM(commission_revenue)
+                / NULLIF(SUM(net_gmv), 0),
+                2
+            ) AS effective_take_rate
 
-gross_merch = metrics[1]
-net_merch = metrics[2]
-cogs = metrics[5]
-tax_inclusive = metrics[0]
+        FROM main.mart_seller_health
+    """).fetchone()
 
-print(f"\n  WRONG (current, tax-inclusive):")
-print(f"    GMV:          ${tax_inclusive:,.0f}")
-print(f"    COGS:         ${cogs:,.0f}")
-print(f"    Gross Profit: ${tax_inclusive - cogs:,.0f}")
-print(f"    Margin:       {round(100 * (tax_inclusive - cogs) / tax_inclusive, 1)}%")
+    seller_gross_gmv = seller[0]
+    seller_net_gmv = seller[1]
+    commission_revenue = seller[2]
+    effective_take_rate = seller[3]
 
-print(f"\n  CORRECT (net merchandise, tax-excluded):")
-print(f"    Net GMV:      ${net_merch:,.0f}")
-print(f"    COGS:         ${cogs:,.0f}")
-print(f"    Gross Profit: ${net_merch - cogs:,.0f}")
-print(f"    Margin:       {round(100 * (net_merch - cogs) / net_merch, 1)}%")
+    print("\n  SELLER AND PLATFORM METRICS")
+    print(f"    Seller Gross GMV:    {money(seller_gross_gmv)}")
+    print(f"    Seller Net GMV:      {money(seller_net_gmv)}")
+    print(f"    Commission revenue:  {money(commission_revenue)}")
+    print(f"    Effective take rate: {effective_take_rate}%")
 
-print(f"\n  ALSO CORRECT (gross merchandise, pre-discount):")
-print(f"    Gross GMV:    ${gross_merch:,.0f}")
-print(f"    COGS:         ${cogs:,.0f}")
-print(f"    Gross Profit: ${gross_merch - cogs:,.0f}")
-print(f"    Margin:       {round(100 * (gross_merch - cogs) / gross_merch, 1)}%")
+    assert_equal(
+        "Marketplace and seller Gross GMV",
+        gross_gmv,
+        seller_gross_gmv,
+    )
 
+    assert_equal(
+        "Marketplace and seller Net GMV",
+        net_gmv,
+        seller_net_gmv,
+    )
 
-# Step 4: Corrected commission
-print("\n--- Step 4: Corrected Commission Revenue ---")
+    # ------------------------------------------------------------------
+    # Customer charged amount
+    # ------------------------------------------------------------------
 
-current_commission = conn.execute("""
-    SELECT ROUND(SUM(commission_revenue)) FROM main.mart_seller_health
-""").fetchone()[0]
+    customer = conn.execute("""
+        SELECT
+            ROUND(
+                SUM(
+                    CASE
+                        WHEN is_unknown_customer = FALSE
+                        THEN lifetime_customer_spend
+                        ELSE 0
+                    END
+                ),
+                2
+            ) AS real_customer_spend,
 
-corrected_rate = current_commission / tax_inclusive
-corrected_commission_net = net_merch * corrected_rate
+            ROUND(
+                SUM(
+                    CASE
+                        WHEN is_unknown_customer = TRUE
+                        THEN lifetime_customer_spend
+                        ELSE 0
+                    END
+                ),
+                2
+            ) AS orphan_spend,
 
-print(f"  Current commission (on tax-inclusive):    ${current_commission:,.0f}")
-print(f"  Effective rate on tax-inclusive GMV:       {round(100 * corrected_rate, 2)}%")
-print(f"  If commission on net merchandise instead:  ${corrected_commission_net:,.0f}")
-print(f"  Difference:                               ${current_commission - corrected_commission_net:,.0f}")
+            ROUND(
+                SUM(lifetime_customer_spend),
+                2
+            ) AS platform_customer_spend
 
+        FROM main.mart_customer_ltv
+    """).fetchone()
 
-# Step 5: Corrected category margins
-print("\n--- Step 5: Corrected Category Economics ---")
+    real_customer_spend = customer[0]
+    orphan_spend = customer[1]
+    platform_customer_spend = customer[2]
 
-categories = conn.execute("""
-    SELECT
-        category,
-        ROUND(SUM(unit_price * quantity)) AS gross_gmv,
-        ROUND(SUM(unit_price * quantity - COALESCE(discount_amount, 0))) AS net_gmv,
-        ROUND(SUM(unit_cost * quantity)) AS cogs,
-        ROUND(SUM(unit_price * quantity - COALESCE(discount_amount, 0)) 
-              - SUM(unit_cost * quantity)) AS gross_profit,
-        ROUND(100.0 * (
-            SUM(unit_price * quantity - COALESCE(discount_amount, 0)) - SUM(unit_cost * quantity)
-        ) / NULLIF(SUM(unit_price * quantity - COALESCE(discount_amount, 0)), 0), 1) AS margin_pct
-    FROM main.fact_order_items
-    WHERE quantity > 0 AND unit_price IS NOT NULL AND line_total > 0
-      AND order_status NOT IN ('cancelled', 'refunded')
-    GROUP BY category
-    ORDER BY gross_gmv DESC
-""").df()
-print(categories.to_string(index=False))
+    fact_order_spend = conn.execute("""
+        SELECT ROUND(SUM(total_amount), 2)
+        FROM main.fact_orders
+        WHERE order_status NOT IN ('cancelled', 'refunded')
+    """).fetchone()[0]
 
+    print("\n  CUSTOMER CHARGED AMOUNT")
+    print(f"    Real-customer spend: {money(real_customer_spend)}")
+    print(f"    Orphan-order spend:  {money(orphan_spend)}")
+    print(f"    Platform spend:      {money(platform_customer_spend)}")
+    print(f"    fact_orders spend:   {money(fact_order_spend)}")
 
-# Step 6: Summary
-print("\n" + "=" * 70)
-print("  FINAL METRIC DEFINITIONS")
-print("=" * 70)
-print(f"""
-  Gross Merchandise Value (Gross GMV):
-    Formula: SUM(unit_price × quantity)
-    Value:   ${gross_merch:,.0f}
-    Meaning: Total merchandise value before discounts, before tax
+    assert_equal(
+        "Real plus orphan spend equals platform spend",
+        Decimal(str(real_customer_spend))
+        + Decimal(str(orphan_spend)),
+        platform_customer_spend,
+    )
 
-  Net Merchandise Value (Net GMV):
-    Formula: SUM(unit_price × quantity - discount_amount)
-    Value:   ${net_merch:,.0f}
+    assert_equal(
+        "fact_orders equals customer LTV platform spend",
+        fact_order_spend,
+        platform_customer_spend,
+    )
+
+    # ------------------------------------------------------------------
+    # Referential integrity
+    # ------------------------------------------------------------------
+
+    integrity = conn.execute("""
+        SELECT
+            COUNT(*) FILTER (
+                WHERE c.customer_id IS NULL
+            ) AS unmatched_orders,
+
+            COUNT(*) FILTER (
+                WHERE o.is_unknown_customer = TRUE
+            ) AS unknown_member_orders
+
+        FROM main.fact_orders AS o
+
+        LEFT JOIN main.dim_customers AS c
+            ON o.customer_id = c.customer_id
+
+        WHERE o.order_status NOT IN ('cancelled', 'refunded')
+    """).fetchone()
+
+    print("\n  CUSTOMER REFERENTIAL INTEGRITY")
+    print(f"    Unmatched orders:       {integrity[0]:,}")
+    print(f"    Unknown-member orders:  {integrity[1]:,}")
+
+    if integrity[0] != 0:
+        raise AssertionError(
+            f"Found {integrity[0]:,} unmatched fact orders."
+        )
+
+    print("  PASS — Every fact order matches dim_customers.")
+
+    # ------------------------------------------------------------------
+    # line_total diagnostic
+    # ------------------------------------------------------------------
+
+    line_total = conn.execute("""
+        SELECT ROUND(SUM(line_total), 2)
+        FROM main.fact_order_items
+        WHERE order_status NOT IN ('cancelled', 'refunded')
+          AND line_total IS NOT NULL
+    """).fetchone()[0]
+
+    print("\n  LINE-TOTAL DIAGNOSTIC")
+    print(f"    Tax-inclusive line_total: {money(line_total)}")
+    print(
+        "    This value is not GMV because line_total includes item tax."
+    )
+
+    # ------------------------------------------------------------------
+    # Final definitions
+    # ------------------------------------------------------------------
+
+    print("\n" + "=" * 78)
+    print("  FINAL AUTHORITATIVE DEFINITIONS")
+    print("=" * 78)
+
+    print(
+        f"""
+  Gross GMV
+    Formula: unit_price × quantity
+    Value:   {money(gross_gmv)}
+    Meaning: Merchandise value before discounts and tax
+
+  Net GMV — PRIMARY GMV METRIC
+    Formula: Gross GMV - item discounts
+    Value:   {money(net_gmv)}
     Meaning: Merchandise value after discounts, before tax
-    USE THIS as the primary GMV metric.
 
-  Customer Charged Amount:
-    Formula: SUM(fact_orders.total_amount)
-    Value:   $454,525,513
-    Meaning: Total charged to customers (merchandise + tax + shipping)
-    USE THIS for customer LTV (rename to lifetime_customer_spend)
+  Customer Charged Amount
+    Source:  fact_orders.total_amount
+    Value:   {money(platform_customer_spend)}
+    Meaning: Total eligible amount charged to customers
+    Use:     Customer LTV and payment reconciliation
 
-  Commission Revenue:
-    Formula: Net GMV × seller commission rate
-    Corrected Value: ${corrected_commission_net:,.0f}
-    Current (incorrect): ${current_commission:,.0f}
-    Meaning: What Kairo earns from marketplace transactions
+  Commission Revenue
+    Source:  mart_seller_health.commission_revenue
+    Value:   {money(commission_revenue)}
+    Meaning: Kairo marketplace earnings based on Net GMV
+    Effective take rate: {effective_take_rate}%
 
-  Previously Published GMV ($406,966,903):
-    This was line_total which includes tax — INCORRECT for GMV
-    Should not be used as the primary business metric
-""")
+  Real-Customer Spend
+    Value:   {money(real_customer_spend)}
+
+  Orphan-Order Reconciliation Spend
+    Value:   {money(orphan_spend)}
+"""
+    )
+
+    print("=" * 78)
+    print("  FINAL AUDIT COMPLETE — ALL RECONCILIATIONS PASSED")
+    print("=" * 78)
+
+finally:
+    conn.close()
