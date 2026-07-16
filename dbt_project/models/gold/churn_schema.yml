@@ -1,0 +1,107 @@
+version: 2
+
+models:
+  - name: mart_customer_churn_scores
+    description: >
+      Customer-level churn probabilities and operational risk
+      classifications produced by the approved behavioral-only model.
+      The table contains one row per scored customer as of the latest
+      scoring date.
+
+    columns:
+      - name: customer_id
+        description: Unique customer identifier.
+        data_tests:
+          - not_null
+          - unique
+          - relationships:
+              arguments:
+                to: ref('dim_customers')
+                field: customer_id
+
+      - name: score_date
+        description: Point-in-time date used to build scoring features.
+        data_tests:
+          - not_null
+
+      - name: churn_probability
+        description: Predicted probability of no eligible order in the next 90 days.
+        data_tests:
+          - not_null
+
+      - name: predicted_churn_flag
+        description: >
+          Binary prediction based on the validation-selected probability
+          threshold.
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [0, 1]
+
+      - name: risk_decile
+        description: >
+          Risk ranking from 1 to 10, where decile 1 represents the
+          highest predicted churn risk.
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+
+      - name: risk_segment
+        description: Capacity-based operational outreach segment.
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values:
+                  - high_risk
+                  - medium_risk
+                  - low_risk
+
+      - name: recommended_action
+        description: Rule-based retention or re-engagement action.
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values:
+                  - priority_retention_outreach
+                  - service_recovery_review
+                  - targeted_retention_incentive
+                  - standard_retention_campaign
+                  - low_cost_reengagement
+                  - no_immediate_action
+
+      - name: lifetime_spend_missing_flag
+        description: Indicates that lifetime spend is unavailable because of source-data corruption.
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [0, 1]
+
+      - name: probability_threshold
+        description: Validation-selected probability threshold used for the binary prediction.
+        data_tests:
+          - not_null
+
+      - name: model_name
+        description: Name of the approved production model.
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values:
+                  - behavioral_only
+
+      - name: model_version
+        description: Version identifier of the scoring model.
+        data_tests:
+          - not_null
+
+      - name: scored_at_utc
+        description: UTC timestamp when scoring was completed.
+        data_tests:
+          - not_null

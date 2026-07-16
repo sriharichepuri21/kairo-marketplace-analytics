@@ -64,4 +64,12 @@ dbt_project/logs/
 # Chaos engine
 # ─────────────────────────────────────────
 raw_data_clean/
-chaos_manifest/
+chaos_manifest/analytics/churn_model/data/customer_snapshots.parquet
+analytics/churn_model/data/train_dataset.parquet
+analytics/churn_model/data/validation_dataset.parquet
+analytics/churn_model/data/test_dataset.parquet
+analytics/churn_model/model_artifacts/*.pkl
+analytics/churn_model/model_artifacts/test_predictions.parquet
+analytics/churn_model/__pycache__/
+analytics/churn_model/model_artifacts/__pycache__/
+!analytics/churn_model/data/customer_churn_scores.parquet

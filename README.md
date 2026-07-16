@@ -47,6 +47,26 @@ An end-to-end Business Intelligence Engineering project that simulates a global 
 
 ---
 
+<!-- CHURN-SCREENSHOTS:START -->
+### Customer Churn Risk Overview
+
+![Customer Churn Risk Overview](docs/screenshots/customer_churn_overview.png)
+
+### Churn Risk Deciles and Recommended Actions
+
+![Churn Risk Deciles and Actions](docs/screenshots/customer_churn_deciles_actions.png)
+
+### High-Risk Customer Intervention Queue
+
+![High-Risk Customer Intervention Queue](docs/screenshots/customer_churn_intervention.png)
+
+### Production Churn Model Performance
+
+![Production Churn Model Performance](docs/screenshots/customer_churn_model_performance.png)
+<!-- CHURN-SCREENSHOTS:END -->
+
+---
+
 ## 🏗️ Architecture
 
 ```text
@@ -84,7 +104,7 @@ Silver Layer — 9 dbt tables
 └── Data-quality flags
                   │
                   ▼
-Gold Layer — 9 dbt tables
+Gold Layer — 10 dbt tables
 ├── dim_customers, dim_sellers, dim_products, dim_dates
 ├── fact_orders, fact_order_items
 ├── mart_gmv_daily
@@ -193,10 +213,10 @@ cd ..
 Expected result:
 
 ```text
-PASS=129 WARN=5 ERROR=0 SKIP=0 TOTAL=134
+PASS=153 WARN=5 ERROR=0 SKIP=0 TOTAL=158
 ```
 
-The successful nodes include 27 models and 102 passing tests. Five warnings represent intentionally injected null conditions.
+The successful nodes include 28 models and 125 passing tests. Five warnings represent intentionally injected null conditions.
 
 ### Verify Governed Metrics
 
@@ -248,16 +268,16 @@ streamlit run analytics/streamlit_app/app.py
 
 ### Metric Definitions
 
-**Gross GMV**  
+**Gross GMV**
 Merchandise value before item discounts and tax.
 
-**Net GMV**  
+**Net GMV**
 Gross GMV minus valid item discounts. Net GMV excludes tax and is the primary marketplace GMV metric.
 
-**Customer charged amount**  
+**Customer charged amount**
 The sum of eligible `fact_orders.total_amount` values, used for customer-LTV and payment reconciliation.
 
-**Commission revenue**  
+**Commission revenue**
 Marketplace earnings calculated by applying each seller's commission rate to Net GMV.
 
 `fact_order_items.line_total` is not used as GMV because it includes item-level tax.
@@ -275,6 +295,123 @@ Marketplace earnings calculated by applying each seller's commission rate to Net
 - Seller lifecycle modeling produced **756 at-risk**, **489 churned**, and **251 no-sales sellers** for intervention analysis.
 
 Channel findings are associations partly created by intentional synthetic generator assumptions; they are not causal marketing conclusions.
+
+---
+
+<!-- CHURN-MODEL:START -->
+## 🤖 Point-in-Time Customer Churn System
+
+Kairo includes a point-in-time churn workflow that builds historical customer snapshots, evaluates models on future periods, scores the latest eligible population, and publishes the results through a dbt Gold mart.
+
+### Temporal Modeling Design
+
+| Dataset | Snapshot dates | Rows | Churn rate |
+|---|---|---:|---:|
+| Training | 2024-12-31 and 2025-03-31 | 226,740 | 31.4% |
+| Validation | 2025-06-30 | 148,272 | 27.4% |
+| Test | 2025-09-30 | 172,352 | 23.0% |
+| **All snapshots** | Four point-in-time snapshots | **547,364** | — |
+
+Each record represents `customer_id × snapshot_date`. Features use only information available through the snapshot date, and churn means no eligible order during the following 90 days.
+
+The primary model excludes the synthetic `segment` field because it is intentionally correlated with generated purchasing behavior.
+
+### Model Comparison
+
+| Test metric | Behavioral only | Behavioral + channel | Change |
+|---|---:|---:|---:|
+| ROC-AUC | 0.7757 | 0.7765 | +0.0008 |
+| PR-AUC | 0.4865 | 0.4878 | +0.0013 |
+| Precision | 0.3831 | 0.3768 | -0.0063 |
+| Recall | 0.7873 | 0.8089 | +0.0216 |
+| F1 | 0.5154 | 0.5141 | -0.0013 |
+| Top-10% lift | 2.51× | 2.52× | +0.01× |
+| Top-20% recall | 43.23% | 43.33% | +0.10 pp |
+
+Signup channel added negligible out-of-time predictive value, so the simpler **behavioral-only model** was promoted for production scoring.
+
+### Production Scoring Output
+
+| Metric | Result |
+|---|---:|
+| Customers scored | 197,546 |
+| Average churn probability | 30.1% |
+| Threshold-positive customers | 87,510 |
+| Threshold-positive share | 44.3% |
+| High-risk customers | 39,510 |
+| Medium-risk customers | 59,263 |
+| Low-risk customers | 98,773 |
+| High-risk lifetime spend | Approximately $32.0M |
+| Missing lifetime-spend values tracked | 18 |
+
+Operational risk segments are capacity-based:
+
+| Risk segment | Definition | Customers | Share |
+|---|---|---:|---:|
+| High risk | Risk deciles 1–2 | 39,510 | 20.0% |
+| Medium risk | Risk deciles 3–5 | 59,263 | 30.0% |
+| Low risk | Risk deciles 6–10 | 98,773 | 50.0% |
+
+The validation-selected threshold is stored separately as `predicted_churn_flag`; it does not define outreach capacity.
+
+### Intervention Framework
+
+| Recommended action | Customers |
+|---|---:|
+| No immediate action | 98,773 |
+| Low-cost re-engagement | 59,263 |
+| Standard retention campaign | 18,757 |
+| Service-recovery review | 12,725 |
+| Targeted retention incentive | 7,499 |
+| Priority retention outreach | 529 |
+
+### Churn Pipeline
+
+```text
+Historical Gold Models
+        │
+        ▼
+Point-in-Time Feature Engineering
+├── Four temporal snapshots
+├── 25 behavioral features
+├── Timestamp-specific filtering
+├── Single-order customer inclusion
+└── 90-day future-purchase churn label
+        │
+        ▼
+Out-of-Time Model Evaluation
+├── Behavioral-only model
+├── Behavioral + signup-channel experiment
+├── Validation threshold selection
+└── Final untouched test period
+        │
+        ▼
+Production Scoring
+├── Churn probability
+├── Threshold prediction
+├── Risk decile
+├── Capacity-based risk segment
+└── Recommended action
+        │
+        ▼
+dbt Gold mart_customer_churn_scores
+        │
+        ▼
+Streamlit Customer Churn Risk Dashboard
+```
+
+### Run the Churn Pipeline
+
+```bash
+python analytics/churn_model/01_feature_engineering.py
+python analytics/churn_model/02_train_model.py
+python analytics/churn_model/03_write_scores.py
+
+cd dbt_project
+dbt build --select mart_customer_churn_scores
+cd ..
+```
+<!-- CHURN-MODEL:END -->
 
 ---
 
@@ -303,9 +440,9 @@ Every injected change is recorded in `chaos_manifest/` for audit and comparison.
 Current dbt validation:
 
 ```text
-Models: 27
-Tests: 107
-Passing tests: 102
+Models: 28
+Tests: 130
+Passing tests: 125
 Documented warnings: 5
 Errors: 0
 ```
