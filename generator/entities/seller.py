@@ -7,7 +7,7 @@ like GMV contribution, commission revenue, and retention.
 """
 
 import random
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from enum import Enum
 from uuid import uuid4
 
@@ -44,6 +44,20 @@ class SellerTier(str, Enum):
     SILVER = "silver"
     GOLD = "gold"
     PLATINUM = "platinum"
+
+
+class SellerSalesProfile(str, Enum):
+    """
+    Synthetic sales-availability profile.
+
+    This field controls when a seller can receive generated orders.
+    Gold-layer health status remains derived from observed sales dates.
+    """
+
+    ACTIVE = "active"
+    AT_RISK = "at_risk"
+    CHURNED = "churned"
+    NO_SALES = "no_sales"
 
 
 class ProductCategory(str, Enum):
@@ -83,6 +97,8 @@ class Seller(BaseModel):
     seller_type: SellerType
     tier: SellerTier
     onboarding_date: date
+    sales_profile: SellerSalesProfile
+    sales_end_date: date | None
     region: Region
     country_code: str = Field(..., min_length=2, max_length=2)
     primary_category: ProductCategory
@@ -155,6 +171,22 @@ TIER_REVIEW_RANGE: dict[SellerTier, tuple[int, int]] = {
     SellerTier.PLATINUM: (2000, 20000),
 }
 
+# Fixed marketplace window. Generation must not depend on today's date.
+DATA_START_DATE = date(2023, 1, 1)
+DATA_END_DATE = date(2025, 12, 31)
+
+# Sellers may onboard before or during the analytical window.
+SELLER_ONBOARDING_START = date(2022, 1, 1)
+SELLER_ONBOARDING_END = date(2024, 12, 31)
+
+# Synthetic seller availability distribution.
+SELLER_SALES_PROFILE_WEIGHTS: dict[SellerSalesProfile, float] = {
+    SellerSalesProfile.ACTIVE: 0.70,
+    SellerSalesProfile.AT_RISK: 0.15,
+    SellerSalesProfile.CHURNED: 0.10,
+    SellerSalesProfile.NO_SALES: 0.05,
+}
+
 # Business name suffixes for realism
 BUSINESS_SUFFIXES = [
     "Store", "Shop", "Mart", "Direct", "Hub", "Supply",
@@ -166,6 +198,62 @@ BUSINESS_SUFFIXES = [
 # ─────────────────────────────────────────────────────────
 # Generator
 # ─────────────────────────────────────────────────────────
+
+
+def _random_date_between(start_date: date, end_date: date) -> date:
+    """Return a reproducible random date inside an inclusive range."""
+
+    if start_date > end_date:
+        raise ValueError(
+            f"Invalid date range: {start_date} is after {end_date}"
+        )
+
+    day_count = (end_date - start_date).days
+
+    return start_date + timedelta(
+        days=random.randint(0, day_count)
+    )
+
+
+def _generate_sales_window(
+    onboarding_date: date,
+) -> tuple[SellerSalesProfile, date | None]:
+    """
+    Assign a synthetic sales profile and observed sales cutoff.
+
+    The profile is used only by the generator. Seller health remains
+    calculated downstream from actual generated order dates.
+    """
+
+    profile = random.choices(
+        list(SELLER_SALES_PROFILE_WEIGHTS.keys()),
+        weights=list(SELLER_SALES_PROFILE_WEIGHTS.values()),
+        k=1,
+    )[0]
+
+    if profile == SellerSalesProfile.ACTIVE:
+        return profile, DATA_END_DATE
+
+    if profile == SellerSalesProfile.AT_RISK:
+        return profile, _random_date_between(
+            DATA_END_DATE - timedelta(days=90),
+            DATA_END_DATE - timedelta(days=31),
+        )
+
+    if profile == SellerSalesProfile.CHURNED:
+        earliest_end = max(
+            onboarding_date + timedelta(days=30),
+            DATA_END_DATE - timedelta(days=365),
+        )
+
+        latest_end = DATA_END_DATE - timedelta(days=91)
+
+        return profile, _random_date_between(
+            earliest_end,
+            latest_end,
+        )
+
+    return profile, None
 
 
 def generate_seller(fake: Faker) -> Seller:
@@ -223,9 +311,20 @@ def generate_seller(fake: Faker) -> Seller:
     is_verified = tier not in (SellerTier.NEW,) or random.random() < 0.3
     is_suspended = random.random() < 0.02  # 2% suspension rate
 
-    # Dates — sellers onboard over the 3-year window
-    onboarding_date = fake.date_between(start_date="-3y", end_date="today")
-    onboarding_dt = datetime.combine(onboarding_date, datetime.min.time())
+    # Fixed dates make every regeneration reproducible over time.
+    onboarding_date = _random_date_between(
+        SELLER_ONBOARDING_START,
+        SELLER_ONBOARDING_END,
+    )
+
+    sales_profile, sales_end_date = _generate_sales_window(
+        onboarding_date
+    )
+
+    onboarding_dt = datetime.combine(
+        onboarding_date,
+        datetime.min.time(),
+    )
 
     return Seller(
         seller_id=str(uuid4()),
@@ -234,6 +333,8 @@ def generate_seller(fake: Faker) -> Seller:
         seller_type=seller_type,
         tier=tier,
         onboarding_date=onboarding_date,
+        sales_profile=sales_profile,
+        sales_end_date=sales_end_date,
         region=region,
         country_code=country_code,
         primary_category=primary_category,

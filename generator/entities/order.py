@@ -209,12 +209,18 @@ class ProductInfo:
         category: str,
         price: float,
         cost: float,
+        seller_onboarding_date: date,
+        seller_sales_profile: str,
+        seller_sales_end_date: date | None,
     ):
         self.product_id = product_id
         self.seller_id = seller_id
         self.category = category
         self.price = price
         self.cost = cost
+        self.seller_onboarding_date = seller_onboarding_date
+        self.seller_sales_profile = seller_sales_profile
+        self.seller_sales_end_date = seller_sales_end_date
 
 
 # ─────────────────────────────────────────────────────────
@@ -258,10 +264,61 @@ def _pick_order_date(
     )
 
 
+def _is_product_available(
+    product: ProductInfo,
+    order_date: date,
+) -> bool:
+    """Check whether the seller can receive a sale on this date."""
+
+    if product.seller_sales_profile == "no_sales":
+        return False
+
+    if order_date < product.seller_onboarding_date:
+        return False
+
+    if product.seller_sales_end_date is None:
+        return False
+
+    return order_date <= product.seller_sales_end_date
+
+
+def _select_available_products(
+    products: list[ProductInfo],
+    order_date: date,
+    item_count: int,
+) -> list[ProductInfo]:
+    """
+    Select products whose sellers are available on the order date.
+
+    Rejection sampling avoids rebuilding a 50K-product pool for every
+    generated order while preserving random product selection.
+    """
+
+    selected: list[ProductInfo] = []
+    attempts = 0
+    max_attempts = max(500, item_count * 100)
+
+    while len(selected) < item_count and attempts < max_attempts:
+        product = random.choice(products)
+        attempts += 1
+
+        if _is_product_available(product, order_date):
+            selected.append(product)
+
+    if len(selected) != item_count:
+        raise RuntimeError(
+            "Unable to find enough products from sellers available "
+            f"on {order_date}. Selected {len(selected)} of {item_count}."
+        )
+
+    return selected
+
+
 def _generate_order_items(
     order_id: str,
     products: list[ProductInfo],
     segment: str,
+    order_dt: datetime,
 ) -> list[OrderItem]:
     """Generate 1-N order items for a single order."""
 
@@ -274,7 +331,11 @@ def _generate_order_items(
         num_items = max(2, int(num_items * 1.5))
         num_items = min(num_items, 15)
 
-    selected_products = random.choices(products, k=num_items)
+    selected_products = _select_available_products(
+        products=products,
+        order_date=order_dt.date(),
+        item_count=num_items,
+    )
     items = []
 
     for product in selected_products:
@@ -400,7 +461,12 @@ def generate_orders(
             customer_first_orders.add(customer.customer_id)
 
             # Generate order items
-            items = _generate_order_items(order_id, products, seg)
+            items = _generate_order_items(
+                order_id=order_id,
+                products=products,
+                segment=seg,
+                order_dt=order_dt,
+            )
 
             # Calculate order totals from items
             subtotal = round(sum(i.unit_price * i.quantity for i in items), 2)

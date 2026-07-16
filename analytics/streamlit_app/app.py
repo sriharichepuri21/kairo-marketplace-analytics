@@ -1,15 +1,19 @@
 """
 Kairo Marketplace Analytics — Executive Dashboard Suite
 
-This is the entry point for the Streamlit multi-page app.
-Each page in the /pages folder becomes a tab in the sidebar.
+Entry point for the Streamlit multi-page Business Intelligence app.
 
-Run: streamlit run analytics/streamlit_app/app.py
+Run:
+    streamlit run analytics/streamlit_app/app.py
 """
 
-import streamlit as st
-import duckdb
 from pathlib import Path
+
+import duckdb
+import plotly.express as px
+import plotly.graph_objects as go
+import streamlit as st
+
 
 st.set_page_config(
     page_title="Kairo Analytics",
@@ -22,168 +26,266 @@ DB_PATH = Path("warehouse/kairo.duckdb")
 
 @st.cache_resource
 def get_connection():
+    """Open the governed DuckDB warehouse."""
+
     return duckdb.connect(str(DB_PATH), read_only=True)
 
 
 def main():
+    """Render the executive overview."""
+
     st.title("📊 Kairo Marketplace Analytics")
+    st.caption(
+        "Governed marketplace reporting across customers, orders, "
+        "categories, regions, and sellers."
+    )
     st.markdown("---")
 
     conn = get_connection()
 
-    # Top-level KPIs
-    col1, col2, col3, col4 = st.columns(4)
+    kpis = conn.execute("""
+        SELECT
+            (
+                SELECT ROUND(SUM(net_gmv), 2)
+                FROM main.mart_gmv_daily
+            ) AS net_gmv,
 
-    # Total GMV
-    gmv = conn.execute("""
-        SELECT ROUND(SUM(gmv), 2) FROM main.mart_gmv_daily
-    """).fetchone()[0]
+            (
+                SELECT ROUND(SUM(total_amount), 2)
+                FROM main.fact_orders
+                WHERE order_status NOT IN ('cancelled', 'refunded')
+            ) AS customer_charged_amount,
 
-    # Total Orders
-    orders = conn.execute("""
-        SELECT COUNT(*) FROM main.fact_orders
-        WHERE order_status NOT IN ('cancelled', 'refunded')
-    """).fetchone()[0]
+            (
+                SELECT COUNT(DISTINCT order_id)
+                FROM main.fact_orders
+                WHERE order_status NOT IN ('cancelled', 'refunded')
+            ) AS eligible_orders,
 
-    # Total Customers
-    customers = conn.execute("""
-        SELECT COUNT(*) FROM main.dim_customers
-    """).fetchone()[0]
+            (
+                SELECT COUNT(*)
+                FROM main.dim_customers
+                WHERE is_unknown_customer = FALSE
+            ) AS real_customers,
 
-    # Active Sellers
-    sellers = conn.execute("""
-        SELECT COUNT(*) FROM main.mart_seller_health
-        WHERE health_status = 'active'
-    """).fetchone()[0]
+            (
+                SELECT ROUND(SUM(commission_revenue), 2)
+                FROM main.mart_seller_health
+            ) AS commission_revenue
+    """).fetchone()
 
-    col1.metric("💰 Total GMV", f"${gmv:,.0f}")
-    col2.metric("📦 Total Orders", f"{orders:,}")
-    col3.metric("👥 Customers", f"{customers:,}")
-    col4.metric("🏪 Active Sellers", f"{sellers:,}")
+    col1, col2, col3, col4, col5 = st.columns(5)
+
+    col1.metric("Net GMV", f"${kpis[0]:,.0f}")
+    col2.metric("Customer Charged", f"${kpis[1]:,.0f}")
+    col3.metric("Eligible Orders", f"{kpis[2]:,}")
+    col4.metric("Real Customers", f"{kpis[3]:,}")
+    col5.metric("Commission Revenue", f"${kpis[4]:,.0f}")
+
+    st.caption(
+        "Net GMV represents merchandise value after item discounts "
+        "and before tax. Customer Charged includes eligible order totals."
+    )
 
     st.markdown("---")
+    st.subheader("Monthly Net GMV Trend")
 
-    # GMV Trend
-    st.subheader("GMV Trend — Monthly")
+    monthly = conn.execute("""
+        WITH monthly_gmv AS (
+            SELECT
+                DATE_TRUNC('month', order_date) AS month,
+                ROUND(SUM(net_gmv), 2) AS net_gmv
+            FROM main.mart_gmv_daily
+            GROUP BY 1
+        ),
 
-    monthly_gmv = conn.execute("""
+        monthly_orders AS (
+            SELECT
+                DATE_TRUNC('month', order_date) AS month,
+                COUNT(DISTINCT order_id) AS eligible_orders
+            FROM main.fact_orders
+            WHERE order_status NOT IN ('cancelled', 'refunded')
+            GROUP BY 1
+        )
+
         SELECT
-            DATE_TRUNC('month', order_date) AS month,
-            ROUND(SUM(gmv), 2) AS monthly_gmv,
-            SUM(order_count) AS monthly_orders
-        FROM main.mart_gmv_daily
-        GROUP BY month
-        ORDER BY month
+            g.month,
+            g.net_gmv,
+            o.eligible_orders
+        FROM monthly_gmv AS g
+        JOIN monthly_orders AS o
+            ON g.month = o.month
+        ORDER BY g.month
     """).df()
 
-    if len(monthly_gmv) > 0:
-        import plotly.graph_objects as go
-
+    if not monthly.empty:
         fig = go.Figure()
-        fig.add_trace(go.Bar(
-            x=monthly_gmv["month"].to_list(),
-            y=monthly_gmv["monthly_gmv"].to_list(),
-            name="Monthly GMV",
-            marker_color="#4F46E5",
-        ))
+
+        fig.add_trace(
+            go.Bar(
+                x=monthly["month"].to_list(),
+                y=monthly["net_gmv"].to_list(),
+                name="Net GMV",
+                marker_color="#4F46E5",
+            )
+        )
+
         fig.update_layout(
             xaxis_title="Month",
-            yaxis_title="GMV ($)",
+            yaxis_title="Net GMV ($)",
             height=400,
             margin=dict(l=20, r=20, t=20, b=20),
         )
+
         st.plotly_chart(fig, use_container_width=True)
 
-    # Region Breakdown
-    st.subheader("GMV by Region")
+    st.subheader("Marketplace Performance")
 
     col_left, col_right = st.columns(2)
 
     with col_left:
-        
         region_data = conn.execute("""
+            WITH regional_gmv AS (
+                SELECT
+                    region,
+                    ROUND(SUM(net_gmv), 2) AS net_gmv
+                FROM main.mart_gmv_daily
+                GROUP BY region
+            ),
+
+            regional_orders AS (
+                SELECT
+                    region,
+                    COUNT(DISTINCT order_id) AS eligible_orders
+                FROM main.fact_orders
+                WHERE order_status NOT IN ('cancelled', 'refunded')
+                GROUP BY region
+            )
+
             SELECT
-                region,
-                ROUND(SUM(gmv), 2) AS total_gmv,
-                SUM(order_count) AS total_orders
-            FROM main.mart_gmv_daily
-            GROUP BY region
-            ORDER BY total_gmv DESC
+                g.region,
+                g.net_gmv,
+                o.eligible_orders
+            FROM regional_gmv AS g
+            JOIN regional_orders AS o
+                ON g.region = o.region
+            ORDER BY g.net_gmv DESC
         """).df()
 
-        import plotly.express as px
-
-        if len(region_data) > 0:
+        if not region_data.empty:
             fig2 = px.pie(
                 region_data,
-                values="total_gmv",
+                values="net_gmv",
                 names="region",
-                color_discrete_sequence=["#4F46E5", "#7C3AED", "#EC4899"],
+                title="Net GMV by Region",
+                color_discrete_sequence=[
+                    "#4F46E5",
+                    "#7C3AED",
+                    "#EC4899",
+                ],
             )
-            fig2.update_layout(height=350, margin=dict(l=20, r=20, t=20, b=20))
+
+            fig2.update_layout(
+                height=350,
+                margin=dict(l=20, r=20, t=40, b=20),
+            )
+
             st.plotly_chart(fig2, use_container_width=True)
 
     with col_right:
-        # Category breakdown
         category_data = conn.execute("""
             SELECT
                 category,
-                ROUND(SUM(gmv), 2) AS total_gmv,
-                SUM(order_count) AS total_orders
-            FROM main.mart_gmv_daily
+
+                ROUND(
+                    SUM(
+                        CASE
+                            WHEN is_gmv_valid THEN net_gmv
+                            ELSE 0
+                        END
+                    ),
+                    2
+                ) AS net_gmv,
+
+                COUNT(
+                    DISTINCT CASE
+                        WHEN is_gmv_valid THEN order_id
+                    END
+                ) AS orders
+
+            FROM main.fact_order_items
+
+            WHERE order_status NOT IN ('cancelled', 'refunded')
+
             GROUP BY category
-            ORDER BY total_gmv DESC
+            ORDER BY net_gmv DESC
         """).df()
 
-        if len(category_data) > 0:
+        if not category_data.empty:
             fig3 = px.bar(
                 category_data,
-                x="total_gmv",
+                x="net_gmv",
                 y="category",
                 orientation="h",
+                title="Net GMV by Category",
                 color_discrete_sequence=["#4F46E5"],
             )
+
             fig3.update_layout(
                 height=350,
-                margin=dict(l=20, r=20, t=20, b=20),
+                margin=dict(l=20, r=20, t=40, b=20),
                 yaxis_title="",
-                xaxis_title="GMV ($)",
+                xaxis_title="Net GMV ($)",
             )
+
             st.plotly_chart(fig3, use_container_width=True)
 
-    # Customer Segments
     st.subheader("Customer Activity Status")
 
-    segment_data = conn.execute("""
+    customer_health = conn.execute("""
         SELECT
             activity_status,
-            COUNT(*) AS customer_count,
-            ROUND(AVG(lifetime_revenue), 2) AS avg_ltv,
-            ROUND(AVG(total_orders), 1) AS avg_orders
+            COUNT(*) AS customers,
+
+            ROUND(
+                AVG(lifetime_revenue),
+                2
+            ) AS avg_lifetime_spend,
+
+            ROUND(
+                AVG(total_orders),
+                1
+            ) AS avg_orders
+
         FROM main.mart_customer_ltv
+
+        WHERE is_unknown_customer = FALSE
+
         GROUP BY activity_status
-        ORDER BY customer_count DESC
+        ORDER BY customers DESC
     """).df()
 
-    if len(segment_data) > 0:
+    if not customer_health.empty:
         st.dataframe(
-            segment_data,
+            customer_health.style.format(
+                {
+                    "customers": "{:,.0f}",
+                    "avg_lifetime_spend": "${:,.2f}",
+                    "avg_orders": "{:,.1f}",
+                }
+            ),
             use_container_width=True,
             hide_index=True,
         )
 
-    # Pipeline Health
     st.markdown("---")
     st.subheader("🔧 Pipeline Health")
 
     col_a, col_b, col_c = st.columns(3)
 
-    dbt_run = "dbt run → PASS=27"
-    dbt_test = "dbt test → PASS=99, WARN=8, ERROR=0"
-
-    col_a.info(f"**Models:** {dbt_run}")
-    col_b.info(f"**Tests:** {dbt_test}")
-    col_c.info("**Data Quality:** 8 known warnings documented")
+    col_a.info("**Models:** 27 Bronze, Silver, and Gold models")
+    col_b.info("**Tests:** 107 tests — 102 pass, 5 warn, 0 error")
+    col_c.info("**Reconciliation:** $0 cross-model variance")
 
 
 if __name__ == "__main__":

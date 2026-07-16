@@ -40,6 +40,7 @@ ORDERS_OUTPUT = Path("raw_data/orders/orders.parquet")
 ITEMS_OUTPUT = Path("raw_data/order_items/order_items.parquet")
 CUSTOMERS_PATH = Path("raw_data/customers/customers.parquet")
 PRODUCTS_PATH = Path("raw_data/products/products.parquet")
+SELLERS_PATH = Path("raw_data/sellers/sellers.parquet")
 
 
 def load_customer_profiles(path: Path) -> list[CustomerProfile]:
@@ -61,24 +62,50 @@ def load_customer_profiles(path: Path) -> list[CustomerProfile]:
     ]
 
 
-def load_product_info(path: Path) -> list[ProductInfo]:
-    """Load product data from Parquet into lightweight product info."""
+def load_product_info(
+    product_path: Path,
+    seller_path: Path,
+) -> list[ProductInfo]:
+    """
+    Load active products with the seller sales window required
+    for date-aware order generation.
+    """
+
     conn = duckdb.connect()
+
     rows = conn.execute(f"""
-        SELECT product_id, seller_id, category, price, cost
-        FROM '{path}'
-        WHERE is_active = true
+        SELECT
+            p.product_id,
+            p.seller_id,
+            p.category,
+            p.price,
+            p.cost,
+            s.onboarding_date,
+            s.sales_profile,
+            s.sales_end_date
+
+        FROM '{product_path}' AS p
+
+        INNER JOIN '{seller_path}' AS s
+            ON p.seller_id = s.seller_id
+
+        WHERE p.is_active = TRUE
     """).fetchall()
+
+    conn.close()
 
     return [
         ProductInfo(
-            product_id=r[0],
-            seller_id=r[1],
-            category=r[2],
-            price=r[3],
-            cost=r[4],
+            product_id=row[0],
+            seller_id=row[1],
+            category=row[2],
+            price=row[3],
+            cost=row[4],
+            seller_onboarding_date=row[5],
+            seller_sales_profile=row[6],
+            seller_sales_end_date=row[7],
         )
-        for r in rows
+        for row in rows
     ]
 
 
@@ -89,7 +116,10 @@ def main() -> None:
     print(f"  ✓ Loaded {len(customers):,} customers")
 
     print("Loading product info...")
-    products = load_product_info(PRODUCTS_PATH)
+    products = load_product_info(
+        product_path=PRODUCTS_PATH,
+        seller_path=SELLERS_PATH,
+    )
     print(f"  ✓ Loaded {len(products):,} active products")
 
     # Generate

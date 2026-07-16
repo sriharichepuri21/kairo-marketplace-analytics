@@ -57,6 +57,13 @@ def main() -> None:
         .sort("count", descending=True)
     )
     print()
+    print("Sales-profile distribution:")
+    print(
+        df.group_by("sales_profile")
+        .agg(pl.len().alias("count"))
+        .sort("count", descending=True)
+    )
+    print()
     print("Tier distribution:")
     print(
         df.group_by("tier")
