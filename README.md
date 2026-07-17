@@ -1,17 +1,18 @@
 # 📊 Kairo Marketplace Business Intelligence Platform
 
-An end-to-end Business Intelligence Engineering project that simulates a global e-commerce marketplace—from synthetic operational data generation and production-style data-quality failures to governed dimensional models, financial reconciliation, and interactive executive dashboards.
+An end-to-end Business Intelligence and analytics engineering project that simulates a global e-commerce marketplace—from synthetic operational data generation and production-style data-quality failures to governed dimensional models, financial reconciliation, point-in-time customer churn prediction, and interactive stakeholder dashboards.
 
 ## 🎯 What This Project Demonstrates
 
 - **Large-scale synthetic data generation** — 16M+ records across nine interconnected marketplace entities
 - **Production-style data-quality simulation** — duplicates, null variants, type drift, schema evolution, late-arriving records, orphan keys, and business-rule violations
 - **Medallion architecture** — Bronze, Silver, and Gold transformation layers built with dbt
-- **Dimensional modeling** — four dimensions, two fact tables, and three analytical marts
+- **Dimensional modeling** — four dimensions, two fact tables, and four analytical marts
 - **Metric governance** — explicit Gross GMV, Net GMV, customer charged amount, and commission definitions
 - **Financial reconciliation** — $0 cross-model variance across governed marketplace, seller, and customer measures
-- **Automated testing** — 107 dbt data-quality tests with documented warnings for intentionally injected chaos
-- **Stakeholder dashboards** — executive, category, regional, customer, and seller reporting in Streamlit
+- **Automated testing** — 130 dbt data-quality tests: 125 passing checks and five documented warnings for intentionally injected chaos
+- **Stakeholder dashboards** — executive, category, regional, customer, seller, and churn-risk reporting in Streamlit
+- **Point-in-time machine learning** — temporal feature snapshots, out-of-time evaluation, production scoring, risk deciles, and retention actions
 
 ---
 
@@ -109,7 +110,8 @@ Gold Layer — 10 dbt tables
 ├── fact_orders, fact_order_items
 ├── mart_gmv_daily
 ├── mart_customer_ltv
-└── mart_seller_health
+├── mart_seller_health
+└── mart_customer_churn_scores
                   │
                   ▼
 Governance, Testing, and Reconciliation
@@ -117,14 +119,15 @@ Governance, Testing, and Reconciliation
 ├── Unknown-customer member reconciliation
 ├── Customer-spend reconciliation
 ├── Seller-commission reconciliation
-└── 107 automated dbt tests
+└── 130 automated dbt tests
                   │
                   ▼
 Streamlit Business Intelligence Dashboards
 ├── Executive overview
 ├── Executive Weekly Business Review
 ├── Category performance
-└── Seller health
+├── Seller health
+└── Customer churn risk
 ```
 
 ---
@@ -138,7 +141,8 @@ Streamlit Business Intelligence Dashboards
 | Storage | Parquet with Zstandard compression |
 | Warehouse | DuckDB |
 | Transformation | dbt Core and dbt-duckdb |
-| Modeling | Star schema, fact tables, dimensions, analytical marts |
+| Modeling | Star schema, fact tables, dimensions, and analytical marts |
+| Machine learning | scikit-learn pipelines, point-in-time features, temporal validation, and production scoring |
 | Testing | dbt generic tests and custom SQL tests |
 | Dashboards | Streamlit and Plotly |
 | Version control | Git and GitHub |
@@ -161,7 +165,16 @@ kairo-marketplace-analytics/
 │   ├── macros/
 │   └── tests/
 ├── analytics/
+│   ├── churn_model/
+│   │   ├── data/
+│   │   ├── model_artifacts/
+│   │   ├── 01_feature_engineering.py
+│   │   ├── 02_train_model.py
+│   │   ├── 03_write_scores.py
+│   │   └── churn_analysis_report.md
 │   └── streamlit_app/
+│       ├── app.py
+│       └── pages/
 ├── scripts/
 ├── raw_data/
 ├── raw_data_clean/
@@ -225,6 +238,18 @@ python scripts/verify_metrics.py
 python scripts/reconcile_metrics.py
 python scripts/final_reconciliation.py
 python scripts/marketing_channel_analysis.py
+```
+
+### Run the Customer Churn Pipeline
+
+```bash
+python analytics/churn_model/01_feature_engineering.py
+python analytics/churn_model/02_train_model.py
+python analytics/churn_model/03_write_scores.py
+
+cd dbt_project
+dbt build --select mart_customer_churn_scores
+cd ..
 ```
 
 ### Launch the Dashboards
@@ -470,7 +495,7 @@ Kairo is a fictional global marketplace operating across the United States, Euro
 - **Scale:** 200K customers, 5K sellers, and 50K products
 - **Revenue model:** Tiered seller commissions applied to Net GMV
 - **Effective take rate:** 13.19%
-- **Primary stakeholders:** Executives, category managers, seller-success teams, and analytics engineers
+- **Primary stakeholders:** Executives, category managers, seller-success teams, retention teams, and analytics engineers
 
 See [PROJECT_CHARTER.md](./PROJECT_CHARTER.md) for the complete business context and stakeholder definitions.
 
@@ -478,7 +503,7 @@ See [PROJECT_CHARTER.md](./PROJECT_CHARTER.md) for the complete business context
 
 ## 👤 About
 
-Built by **Srihari Chepuri** as a portfolio project demonstrating end-to-end Business Intelligence Engineering, analytics engineering, dimensional modeling, metric governance, data-quality testing, and executive reporting.
+Built by **Srihari Chepuri** as a portfolio project demonstrating end-to-end Business Intelligence Engineering, analytics engineering, dimensional modeling, metric governance, data-quality testing, point-in-time machine learning, production scoring, and stakeholder reporting.
 
 - GitHub: [@sriharichepuri21](https://github.com/sriharichepuri21)
 
