@@ -1,9 +1,4 @@
-"""
-Category Manager Dashboard.
-
-Persona: VP of Category
-Cadence: Weekly
-"""
+"""Category Performance dashboard."""
 
 from pathlib import Path
 
@@ -12,157 +7,100 @@ import plotly.express as px
 import streamlit as st
 
 
+PROJECT_ROOT = Path(__file__).resolve().parents[3]
+DB_PATH = PROJECT_ROOT / "warehouse" / "kairo_dashboard.duckdb"
+
 st.set_page_config(
     page_title="Category Performance",
-    page_icon="🏷️",
+    page_icon="🛍️",
     layout="wide",
 )
 
-DB_PATH = Path("warehouse/kairo.duckdb")
-
 
 @st.cache_resource
-def get_connection():
+def get_connection() -> duckdb.DuckDBPyConnection:
+    if not DB_PATH.exists():
+        raise FileNotFoundError(
+            f"Dashboard warehouse was not found at {DB_PATH}."
+        )
     return duckdb.connect(str(DB_PATH), read_only=True)
 
 
-def main():
-    st.title("🏷️ Category Performance Dashboard")
+def main() -> None:
+    st.title("🛍️ Category Performance Dashboard")
     st.markdown("*For Category Managers — weekly performance review*")
     st.caption("All financial reporting uses tax-exclusive Net GMV.")
     st.markdown("---")
 
-    conn = get_connection()
+    try:
+        conn = get_connection()
+    except Exception as error:
+        st.error(str(error))
+        st.stop()
 
-    categories = conn.execute("""
-        SELECT DISTINCT category
-        FROM main.fact_order_items
-        WHERE category IS NOT NULL
+    categories = conn.execute(
+        """
+        SELECT category
+        FROM dashboard_category_summary
         ORDER BY category
-    """).df()["category"].to_list()
+        """
+    ).df()["category"].tolist()
 
     selected_category = st.selectbox(
         "Select Category",
         ["All Categories"] + categories,
     )
 
-    category_filter = ""
+    category_parameter = (
+        None
+        if selected_category == "All Categories"
+        else selected_category
+    )
 
-    if selected_category != "All Categories":
-        safe_category = selected_category.replace("'", "''")
-        category_filter = f"AND category = '{safe_category}'"
-
-    kpis = conn.execute(f"""
+    kpis = conn.execute(
+        """
         SELECT
+            ROUND(SUM(net_gmv), 2) AS net_gmv,
+            SUM(orders) AS orders,
+            SUM(items) AS items,
             ROUND(
-                SUM(
-                    CASE
-                        WHEN is_gmv_valid THEN net_gmv
-                        ELSE 0
-                    END
-                ),
-                2
-            ) AS net_gmv,
-
-            COUNT(
-                DISTINCT CASE
-                    WHEN is_gmv_valid THEN order_id
-                END
-            ) AS orders,
-
-            SUM(
-                CASE
-                    WHEN is_gmv_valid THEN quantity
-                    ELSE 0
-                END
-            ) AS items,
-
-            ROUND(
-                100.0
-                * SUM(
-                    CASE
-                        WHEN is_margin_valid
-                        THEN net_gmv - merchandise_cost
-                        ELSE 0
-                    END
-                )
-                / NULLIF(
-                    SUM(
-                        CASE
-                            WHEN is_margin_valid THEN net_gmv
-                            ELSE 0
-                        END
-                    ),
-                    0
-                ),
+                100.0 * SUM(gross_margin_amount)
+                / NULLIF(SUM(margin_net_gmv), 0),
                 1
             ) AS weighted_margin
-
-        FROM main.fact_order_items
-
-        WHERE order_status NOT IN ('cancelled', 'refunded')
-        {category_filter}
-    """).fetchone()
+        FROM dashboard_category_summary
+        WHERE (? IS NULL OR category = ?)
+        """,
+        [category_parameter, category_parameter],
+    ).fetchone()
 
     col1, col2, col3, col4 = st.columns(4)
-
     col1.metric("Net GMV", f"${(kpis[0] or 0):,.0f}")
     col2.metric("Distinct Orders", f"{(kpis[1] or 0):,}")
     col3.metric("Valid Items Sold", f"{(kpis[2] or 0):,}")
-    col4.metric("Weighted Margin", f"{(kpis[3] or 0)}%")
+    col4.metric("Weighted Margin", f"{(kpis[3] or 0):.1f}%")
 
     st.markdown("---")
     st.subheader(f"Monthly Trend — {selected_category}")
 
-    monthly = conn.execute(f"""
+    monthly = conn.execute(
+        """
         SELECT
-            DATE_TRUNC('month', order_date) AS month,
-
+            month,
+            ROUND(SUM(net_gmv), 2) AS net_gmv,
+            SUM(orders) AS orders,
             ROUND(
-                SUM(
-                    CASE
-                        WHEN is_gmv_valid THEN net_gmv
-                        ELSE 0
-                    END
-                ),
-                2
-            ) AS net_gmv,
-
-            COUNT(
-                DISTINCT CASE
-                    WHEN is_gmv_valid THEN order_id
-                END
-            ) AS orders,
-
-            ROUND(
-                100.0
-                * SUM(
-                    CASE
-                        WHEN is_margin_valid
-                        THEN net_gmv - merchandise_cost
-                        ELSE 0
-                    END
-                )
-                / NULLIF(
-                    SUM(
-                        CASE
-                            WHEN is_margin_valid THEN net_gmv
-                            ELSE 0
-                        END
-                    ),
-                    0
-                ),
+                100.0 * SUM(gross_margin_amount)
+                / NULLIF(SUM(margin_net_gmv), 0),
                 1
             ) AS weighted_margin
-
-        FROM main.fact_order_items
-
-        WHERE order_status NOT IN ('cancelled', 'refunded')
-        {category_filter}
-
-        GROUP BY 1
-        ORDER BY 1
-    """).df()
+        FROM dashboard_category_monthly
+        WHERE (? IS NULL OR category = ?)
+        GROUP BY month
+        ORDER BY month
+        """,
+        [category_parameter, category_parameter],
+    ).df()
 
     if not monthly.empty:
         fig = px.line(
@@ -173,91 +111,28 @@ def main():
             labels={"net_gmv": "Net GMV ($)"},
             color_discrete_sequence=["#4F46E5"],
         )
-
         fig.update_layout(
             height=350,
             margin=dict(l=20, r=20, t=20, b=20),
         )
-
         st.plotly_chart(fig, use_container_width=True)
 
     st.subheader("Category Comparison")
 
-    comparison = conn.execute("""
+    comparison = conn.execute(
+        """
         SELECT
             category,
-
-            ROUND(
-                SUM(
-                    CASE
-                        WHEN is_gmv_valid THEN gross_gmv
-                        ELSE 0
-                    END
-                ),
-                2
-            ) AS gross_gmv,
-
-            ROUND(
-                SUM(
-                    CASE
-                        WHEN is_gmv_valid THEN net_gmv
-                        ELSE 0
-                    END
-                ),
-                2
-            ) AS net_gmv,
-
-            COUNT(
-                DISTINCT CASE
-                    WHEN is_gmv_valid THEN order_id
-                END
-            ) AS orders,
-
-            SUM(
-                CASE
-                    WHEN is_gmv_valid THEN quantity
-                    ELSE 0
-                END
-            ) AS items,
-
-            ROUND(
-                100.0
-                * SUM(
-                    CASE
-                        WHEN is_margin_valid
-                        THEN net_gmv - merchandise_cost
-                        ELSE 0
-                    END
-                )
-                / NULLIF(
-                    SUM(
-                        CASE
-                            WHEN is_margin_valid THEN net_gmv
-                            ELSE 0
-                        END
-                    ),
-                    0
-                ),
-                1
-            ) AS weighted_margin,
-
-            ROUND(
-                SUM(
-                    CASE
-                        WHEN is_gmv_valid THEN discount_amount
-                        ELSE 0
-                    END
-                ),
-                2
-            ) AS item_discounts
-
-        FROM main.fact_order_items
-
-        WHERE order_status NOT IN ('cancelled', 'refunded')
-
-        GROUP BY category
+            gross_gmv,
+            net_gmv,
+            orders,
+            items,
+            weighted_margin,
+            item_discounts
+        FROM dashboard_category_summary
         ORDER BY net_gmv DESC
-    """).df()
+        """
+    ).df()
 
     if not comparison.empty:
         st.dataframe(
@@ -277,59 +152,31 @@ def main():
 
     st.subheader(f"Customer Segments — {selected_category}")
 
-    segments = conn.execute(f"""
-        SELECT
-            COALESCE(
+    segments = conn.execute(
+        """
+        WITH selected AS (
+            SELECT
                 customer_segment,
-                'unknown'
-            ) AS customer_segment,
-
+                SUM(net_gmv) AS net_gmv,
+                SUM(orders) AS orders
+            FROM dashboard_category_customer_segment
+            WHERE (? IS NULL OR category = ?)
+            GROUP BY customer_segment
+        )
+        SELECT
+            customer_segment,
+            ROUND(net_gmv, 2) AS net_gmv,
+            orders,
             ROUND(
-                SUM(
-                    CASE
-                        WHEN is_gmv_valid THEN net_gmv
-                        ELSE 0
-                    END
-                ),
-                2
-            ) AS net_gmv,
-
-            COUNT(
-                DISTINCT CASE
-                    WHEN is_gmv_valid THEN order_id
-                END
-            ) AS orders,
-
-            ROUND(
-                100.0
-                * SUM(
-                    CASE
-                        WHEN is_gmv_valid THEN net_gmv
-                        ELSE 0
-                    END
-                )
-                / NULLIF(
-                    SUM(
-                        SUM(
-                            CASE
-                                WHEN is_gmv_valid THEN net_gmv
-                                ELSE 0
-                            END
-                        )
-                    ) OVER (),
-                    0
-                ),
+                100.0 * net_gmv
+                / NULLIF(SUM(net_gmv) OVER (), 0),
                 1
             ) AS net_gmv_share_pct
-
-        FROM main.fact_order_items
-
-        WHERE order_status NOT IN ('cancelled', 'refunded')
-        {category_filter}
-
-        GROUP BY 1
+        FROM selected
         ORDER BY net_gmv DESC
-    """).df()
+        """,
+        [category_parameter, category_parameter],
+    ).df()
 
     if not segments.empty:
         col_l, col_r = st.columns(2)
@@ -341,12 +188,10 @@ def main():
                 names="customer_segment",
                 title="Net GMV by Customer Segment",
             )
-
             fig2.update_layout(
                 height=350,
                 margin=dict(l=20, r=20, t=40, b=20),
             )
-
             st.plotly_chart(fig2, use_container_width=True)
 
         with col_r:

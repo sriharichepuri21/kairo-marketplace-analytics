@@ -1,9 +1,4 @@
-"""
-Seller Health Dashboard.
-
-Persona: Head of Seller Success
-Cadence: Weekly
-"""
+"""Seller Health dashboard."""
 
 from pathlib import Path
 
@@ -12,21 +7,26 @@ import plotly.express as px
 import streamlit as st
 
 
+PROJECT_ROOT = Path(__file__).resolve().parents[3]
+DB_PATH = PROJECT_ROOT / "warehouse" / "kairo_dashboard.duckdb"
+
 st.set_page_config(
     page_title="Seller Health",
     page_icon="🏪",
     layout="wide",
 )
 
-DB_PATH = Path("warehouse/kairo.duckdb")
-
 
 @st.cache_resource
-def get_connection():
+def get_connection() -> duckdb.DuckDBPyConnection:
+    if not DB_PATH.exists():
+        raise FileNotFoundError(
+            f"Dashboard warehouse was not found at {DB_PATH}."
+        )
     return duckdb.connect(str(DB_PATH), read_only=True)
 
 
-def main():
+def main() -> None:
     st.title("🏪 Seller Health Dashboard")
     st.markdown(
         "*For Seller Success — monitor seller ecosystem health*"
@@ -36,33 +36,33 @@ def main():
     )
     st.markdown("---")
 
-    conn = get_connection()
+    try:
+        conn = get_connection()
+    except Exception as error:
+        st.error(str(error))
+        st.stop()
 
-    status = conn.execute("""
+    status = conn.execute(
+        """
         SELECT
             COUNT(*) AS total_sellers,
-
             COUNT(*) FILTER (
                 WHERE health_status = 'active'
             ) AS active_sellers,
-
             COUNT(*) FILTER (
                 WHERE health_status = 'at_risk'
             ) AS at_risk_sellers,
-
             COUNT(*) FILTER (
                 WHERE health_status = 'churned'
             ) AS churned_sellers,
-
             COUNT(*) FILTER (
                 WHERE health_status = 'no_sales'
             ) AS no_sales_sellers
-
-        FROM main.mart_seller_health
-    """).fetchone()
+        FROM mart_seller_health
+        """
+    ).fetchone()
 
     col1, col2, col3, col4, col5 = st.columns(5)
-
     col1.metric("Total Sellers", f"{status[0]:,}")
     col2.metric("✅ Active", f"{status[1]:,}")
     col3.metric("⚠️ At Risk", f"{status[2]:,}")
@@ -72,19 +72,19 @@ def main():
     st.markdown("---")
     st.subheader("Seller Health Distribution")
 
-    health = conn.execute("""
+    health = conn.execute(
+        """
         SELECT
             health_status,
             tier,
             COUNT(*) AS sellers,
             ROUND(SUM(net_gmv), 2) AS net_gmv,
             ROUND(AVG(net_gmv), 2) AS avg_net_gmv
-
-        FROM main.mart_seller_health
-
+        FROM mart_seller_health
         GROUP BY health_status, tier
         ORDER BY health_status, sellers DESC
-    """).df()
+        """
+    ).df()
 
     if not health.empty:
         col_l, col_r = st.columns(2)
@@ -97,31 +97,33 @@ def main():
                 title="Sellers: Health Status → Tier",
                 color_discrete_sequence=px.colors.qualitative.Set2,
             )
-
             fig.update_layout(
                 height=450,
                 margin=dict(l=20, r=20, t=40, b=20),
             )
-
             st.plotly_chart(fig, use_container_width=True)
 
         with col_r:
-            tier_summary = conn.execute("""
+            tier_summary = conn.execute(
+                """
                 SELECT
                     tier,
                     COUNT(*) AS sellers,
                     ROUND(SUM(net_gmv), 2) AS net_gmv,
-                    ROUND(SUM(commission_revenue), 2)
-                        AS commission_revenue,
+                    ROUND(
+                        SUM(commission_revenue),
+                        2
+                    ) AS commission_revenue,
                     ROUND(AVG(avg_rating), 2) AS avg_rating,
-                    ROUND(AVG(commission_rate) * 100, 1)
-                        AS avg_commission_pct
-
-                FROM main.mart_seller_health
-
+                    ROUND(
+                        AVG(commission_rate) * 100,
+                        1
+                    ) AS avg_commission_pct
+                FROM mart_seller_health
                 GROUP BY tier
                 ORDER BY net_gmv DESC
-            """).df()
+                """
+            ).df()
 
             st.dataframe(
                 tier_summary.style.format(
@@ -139,7 +141,8 @@ def main():
 
     st.subheader("Top 20 Sellers by Net GMV")
 
-    top_sellers = conn.execute("""
+    top_sellers = conn.execute(
+        """
         SELECT
             business_name,
             tier,
@@ -148,15 +151,17 @@ def main():
             total_orders,
             total_items_sold,
             ROUND(net_gmv, 2) AS net_gmv,
-            ROUND(commission_revenue, 2) AS commission_revenue,
+            ROUND(
+                commission_revenue,
+                2
+            ) AS commission_revenue,
             avg_rating,
             health_status
-
-        FROM main.mart_seller_health
-
+        FROM mart_seller_health
         ORDER BY net_gmv DESC
         LIMIT 20
-    """).df()
+        """
+    ).df()
 
     if not top_sellers.empty:
         st.dataframe(
@@ -175,7 +180,8 @@ def main():
 
     st.subheader("⚠️ At-Risk Sellers — Intervention Needed")
 
-    at_risk = conn.execute("""
+    at_risk = conn.execute(
+        """
         SELECT
             business_name,
             tier,
@@ -186,14 +192,12 @@ def main():
             days_since_last_sale,
             avg_rating,
             health_status
-
-        FROM main.mart_seller_health
-
+        FROM mart_seller_health
         WHERE health_status = 'at_risk'
-
         ORDER BY net_gmv DESC
         LIMIT 15
-    """).df()
+        """
+    ).df()
 
     if not at_risk.empty:
         st.dataframe(

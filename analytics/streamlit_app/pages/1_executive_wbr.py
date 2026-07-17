@@ -1,6 +1,4 @@
-"""
-Executive Weekly Business Review Dashboard.
-"""
+"""Executive Weekly Business Review dashboard."""
 
 from pathlib import Path
 
@@ -10,164 +8,90 @@ import plotly.graph_objects as go
 import streamlit as st
 
 
+PROJECT_ROOT = Path(__file__).resolve().parents[3]
+DB_PATH = PROJECT_ROOT / "warehouse" / "kairo_dashboard.duckdb"
+
 st.set_page_config(
     page_title="Executive WBR",
     page_icon="📈",
     layout="wide",
 )
 
-DB_PATH = Path("warehouse/kairo.duckdb")
-
 
 @st.cache_resource
-def get_connection():
+def get_connection() -> duckdb.DuckDBPyConnection:
+    if not DB_PATH.exists():
+        raise FileNotFoundError(
+            f"Dashboard warehouse was not found at {DB_PATH}."
+        )
     return duckdb.connect(str(DB_PATH), read_only=True)
 
 
-def main():
+def main() -> None:
     st.title("📈 Executive Weekly Business Review")
     st.caption(
         "Governed marketplace performance using tax-exclusive Net GMV."
     )
     st.markdown("---")
 
-    conn = get_connection()
+    try:
+        conn = get_connection()
+    except Exception as error:
+        st.error(str(error))
+        st.stop()
 
-    kpis = conn.execute("""
+    kpis = conn.execute(
+        """
         SELECT
-            (
-                SELECT ROUND(SUM(net_gmv), 2)
-                FROM main.mart_gmv_daily
-            ) AS net_gmv,
-
-            (
-                SELECT COUNT(DISTINCT order_id)
-                FROM main.fact_orders
-                WHERE order_status NOT IN ('cancelled', 'refunded')
-            ) AS eligible_orders,
-
-            (
-                SELECT ROUND(
-                    SUM(net_gmv)
-                    / NULLIF(
-                        (
-                            SELECT COUNT(DISTINCT order_id)
-                            FROM main.fact_orders
-                            WHERE order_status
-                                NOT IN ('cancelled', 'refunded')
-                        ),
-                        0
-                    ),
-                    2
-                )
-                FROM main.mart_gmv_daily
-            ) AS net_gmv_per_order,
-
-            (
-                SELECT ROUND(
-                    100.0
-                    * SUM(
-                        CASE WHEN total_orders >= 2 THEN 1 ELSE 0 END
-                    )
-                    / NULLIF(
-                        SUM(
-                            CASE WHEN total_orders > 0 THEN 1 ELSE 0 END
-                        ),
-                        0
-                    ),
-                    1
-                )
-                FROM main.mart_customer_ltv
-                WHERE is_unknown_customer = FALSE
-            ) AS repeat_rate,
-
-            (
-                SELECT ROUND(
-                    100.0
-                    * SUM(
-                        CASE
-                            WHEN is_margin_valid
-                            THEN net_gmv - merchandise_cost
-                            ELSE 0
-                        END
-                    )
-                    / NULLIF(
-                        SUM(
-                            CASE
-                                WHEN is_margin_valid THEN net_gmv
-                                ELSE 0
-                            END
-                        ),
-                        0
-                    ),
-                    1
-                )
-                FROM main.fact_order_items
-                WHERE order_status NOT IN ('cancelled', 'refunded')
-            ) AS weighted_margin
-    """).fetchone()
+            net_gmv,
+            eligible_orders,
+            net_gmv_per_order,
+            repeat_buyer_rate,
+            weighted_margin
+        FROM dashboard_kpis
+        """
+    ).fetchone()
 
     col1, col2, col3, col4, col5 = st.columns(5)
-
     col1.metric("Net GMV", f"${kpis[0]:,.0f}")
     col2.metric("Eligible Orders", f"{kpis[1]:,}")
     col3.metric("Net GMV / Order", f"${kpis[2]:,.2f}")
-    col4.metric("Repeat Buyer Rate", f"{kpis[3]}%")
-    col5.metric("Weighted Margin", f"{kpis[4]}%")
+    col4.metric("Repeat Buyer Rate", f"{kpis[3]:.1f}%")
+    col5.metric("Weighted Margin", f"{kpis[4]:.1f}%")
 
     st.markdown("---")
     st.subheader("Monthly Net GMV and Order Trend")
 
-    monthly = conn.execute("""
-        WITH monthly_gmv AS (
-            SELECT
-                DATE_TRUNC('month', order_date) AS month,
-                ROUND(SUM(net_gmv), 2) AS net_gmv
-            FROM main.mart_gmv_daily
-            GROUP BY 1
-        ),
-
-        monthly_orders AS (
-            SELECT
-                DATE_TRUNC('month', order_date) AS month,
-                COUNT(DISTINCT order_id) AS orders
-            FROM main.fact_orders
-            WHERE order_status NOT IN ('cancelled', 'refunded')
-            GROUP BY 1
-        )
-
+    monthly = conn.execute(
+        """
         SELECT
-            g.month,
-            g.net_gmv,
-            o.orders
-        FROM monthly_gmv AS g
-        JOIN monthly_orders AS o
-            ON g.month = o.month
-        ORDER BY g.month
-    """).df()
+            month,
+            net_gmv,
+            eligible_orders AS orders
+        FROM dashboard_monthly_marketplace
+        ORDER BY month
+        """
+    ).df()
 
     if not monthly.empty:
         fig = go.Figure()
-
         fig.add_trace(
             go.Bar(
-                x=monthly["month"].to_list(),
-                y=monthly["net_gmv"].to_list(),
+                x=monthly["month"],
+                y=monthly["net_gmv"],
                 name="Net GMV",
                 marker_color="#4F46E5",
             )
         )
-
         fig.add_trace(
             go.Scatter(
-                x=monthly["month"].to_list(),
-                y=monthly["orders"].to_list(),
+                x=monthly["month"],
+                y=monthly["orders"],
                 name="Orders",
                 yaxis="y2",
                 line=dict(color="#EC4899", width=2),
             )
         )
-
         fig.update_layout(
             yaxis=dict(title="Net GMV ($)", side="left"),
             yaxis2=dict(
@@ -183,73 +107,22 @@ def main():
             ),
             margin=dict(l=20, r=20, t=40, b=20),
         )
-
         st.plotly_chart(fig, use_container_width=True)
 
     st.subheader("Regional Performance")
 
-    region = conn.execute("""
-        WITH financials AS (
-            SELECT
-                region,
-
-                ROUND(
-                    SUM(
-                        CASE
-                            WHEN is_gmv_valid THEN net_gmv
-                            ELSE 0
-                        END
-                    ),
-                    2
-                ) AS net_gmv,
-
-                ROUND(
-                    100.0
-                    * SUM(
-                        CASE
-                            WHEN is_margin_valid
-                            THEN net_gmv - merchandise_cost
-                            ELSE 0
-                        END
-                    )
-                    / NULLIF(
-                        SUM(
-                            CASE
-                                WHEN is_margin_valid THEN net_gmv
-                                ELSE 0
-                            END
-                        ),
-                        0
-                    ),
-                    1
-                ) AS weighted_margin
-
-            FROM main.fact_order_items
-            WHERE order_status NOT IN ('cancelled', 'refunded')
-            GROUP BY region
-        ),
-
-        orders AS (
-            SELECT
-                region,
-                COUNT(DISTINCT order_id) AS orders,
-                COUNT(DISTINCT customer_id) AS customers
-            FROM main.fact_orders
-            WHERE order_status NOT IN ('cancelled', 'refunded')
-            GROUP BY region
-        )
-
+    region = conn.execute(
+        """
         SELECT
-            f.region,
-            f.net_gmv,
-            o.orders,
-            o.customers,
-            f.weighted_margin
-        FROM financials AS f
-        JOIN orders AS o
-            ON f.region = o.region
-        ORDER BY f.net_gmv DESC
-    """).df()
+            region,
+            net_gmv,
+            eligible_orders AS orders,
+            customers,
+            weighted_margin
+        FROM dashboard_region_performance
+        ORDER BY net_gmv DESC
+        """
+    ).df()
 
     if not region.empty:
         col_l, col_r = st.columns(2)
@@ -266,12 +139,10 @@ def main():
                     "#EC4899",
                 ],
             )
-
             fig2.update_layout(
                 height=350,
                 margin=dict(l=20, r=20, t=40, b=20),
             )
-
             st.plotly_chart(fig2, use_container_width=True)
 
         with col_r:
@@ -290,61 +161,18 @@ def main():
 
     st.subheader("Category Performance")
 
-    category = conn.execute("""
+    category = conn.execute(
+        """
         SELECT
             category,
-
-            ROUND(
-                SUM(
-                    CASE
-                        WHEN is_gmv_valid THEN net_gmv
-                        ELSE 0
-                    END
-                ),
-                2
-            ) AS net_gmv,
-
-            COUNT(
-                DISTINCT CASE
-                    WHEN is_gmv_valid THEN order_id
-                END
-            ) AS orders,
-
-            SUM(
-                CASE
-                    WHEN is_gmv_valid THEN quantity
-                    ELSE 0
-                END
-            ) AS items,
-
-            ROUND(
-                100.0
-                * SUM(
-                    CASE
-                        WHEN is_margin_valid
-                        THEN net_gmv - merchandise_cost
-                        ELSE 0
-                    END
-                )
-                / NULLIF(
-                    SUM(
-                        CASE
-                            WHEN is_margin_valid THEN net_gmv
-                            ELSE 0
-                        END
-                    ),
-                    0
-                ),
-                1
-            ) AS weighted_margin
-
-        FROM main.fact_order_items
-
-        WHERE order_status NOT IN ('cancelled', 'refunded')
-
-        GROUP BY category
+            net_gmv,
+            orders,
+            items,
+            weighted_margin
+        FROM dashboard_category_summary
         ORDER BY net_gmv DESC
-    """).df()
+        """
+    ).df()
 
     if not category.empty:
         fig3 = px.bar(
@@ -355,39 +183,26 @@ def main():
             color_continuous_scale="RdYlGn",
             title="Net GMV by Category",
         )
-
         fig3.update_layout(
             height=400,
             margin=dict(l=20, r=20, t=40, b=20),
             yaxis_title="Net GMV ($)",
         )
-
         st.plotly_chart(fig3, use_container_width=True)
 
     st.subheader("Customer Health Distribution")
 
-    customer_health = conn.execute("""
+    customer_health = conn.execute(
+        """
         SELECT
             activity_status,
-            COUNT(*) AS customers,
-
-            ROUND(
-                AVG(lifetime_revenue),
-                2
-            ) AS avg_lifetime_spend,
-
-            ROUND(
-                AVG(total_orders),
-                1
-            ) AS avg_orders
-
-        FROM main.mart_customer_ltv
-
-        WHERE is_unknown_customer = FALSE
-
-        GROUP BY activity_status
+            customers,
+            avg_lifetime_spend,
+            avg_orders
+        FROM dashboard_customer_health
         ORDER BY customers DESC
-    """).df()
+        """
+    ).df()
 
     if not customer_health.empty:
         st.dataframe(

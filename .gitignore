@@ -73,3 +73,11 @@ analytics/churn_model/model_artifacts/test_predictions.parquet
 analytics/churn_model/__pycache__/
 analytics/churn_model/model_artifacts/__pycache__/
 !analytics/churn_model/data/customer_churn_scores.parquet
+!warehouse/kairo_dashboard.duckdb
+!warehouse/
+warehouse/*
+
+# Streamlit deployment warehouse
+!warehouse/
+warehouse/*
+!warehouse/kairo_dashboard.duckdb
