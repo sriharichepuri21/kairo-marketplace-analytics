@@ -376,8 +376,7 @@ CATALOG: list[dict[str, Any]] = [
                 "rating": "4.50",
                 "stock": 20,
                 "description": (
-                    "Robot vacuum with room mapping, scheduled cleaning, "
-                    "and automatic charging."
+                    "Robot vacuum with room mapping, scheduled cleaning, and automatic charging."
                 ),
             },
         ],
@@ -462,9 +461,7 @@ def seed_catalog(session: Session) -> tuple[int, int]:
         category_name = category_data["category"]
         category_slug = slugify(category_name)
 
-        category = session.scalar(
-            select(Category).where(Category.slug == category_slug)
-        )
+        category = session.scalar(select(Category).where(Category.slug == category_slug))
 
         if category is None:
             category = Category(
@@ -480,9 +477,7 @@ def seed_catalog(session: Session) -> tuple[int, int]:
         for product_data in category_data["products"]:
             product_slug = slugify(product_data["name"])
 
-            product = session.scalar(
-                select(Product).where(Product.slug == product_slug)
-            )
+            product = session.scalar(select(Product).where(Product.slug == product_slug))
 
             if product is None:
                 product = Product(
