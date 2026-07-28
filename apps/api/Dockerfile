@@ -11,7 +11,7 @@ COPY app ./app
 COPY tests ./tests
 
 RUN pip install --upgrade pip \
-    && pip install .
+    && pip install ".[dev]"
 
 EXPOSE 8000
 
