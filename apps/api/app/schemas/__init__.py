@@ -1,3 +1,4 @@
+from app.schemas.auth import TokenResponse
 from app.schemas.category import CategoryResponse, CategorySummary
 from app.schemas.product import (
     InventoryResponse,
@@ -5,6 +6,11 @@ from app.schemas.product import (
     ProductImageResponse,
     ProductListItem,
     ProductPageResponse,
+)
+from app.schemas.user import (
+    UserCreate,
+    UserResponse,
+    UserRole,
 )
 
 
@@ -16,4 +22,8 @@ __all__ = [
     "ProductImageResponse",
     "ProductListItem",
     "ProductPageResponse",
+    "TokenResponse",
+    "UserCreate",
+    "UserResponse",
+    "UserRole",
 ]
