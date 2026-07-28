@@ -1,10 +1,15 @@
 import Link from "next/link";
 
 import { getCurrentUser } from "@/lib/auth-server";
+import { getCart } from "@/lib/cart-server";
 
 
 export async function StoreHeader() {
   const currentUser = await getCurrentUser();
+
+  const cart = currentUser
+    ? await getCart()
+    : null;
 
   const firstName =
     currentUser?.full_name
@@ -43,9 +48,19 @@ export async function StoreHeader() {
             Orders
           </span>
 
-          <span className="cursor-not-allowed text-slate-400">
+          <Link
+            href={
+              currentUser
+                ? "/cart"
+                : "/login?next=/cart"
+            }
+            className="transition hover:text-slate-950"
+          >
             Cart
-          </span>
+            {cart && cart.total_quantity > 0
+              ? ` (${cart.total_quantity})`
+              : ""}
+          </Link>
 
           {currentUser ? (
             <>
@@ -59,7 +74,7 @@ export async function StoreHeader() {
               >
                 <button
                   type="submit"
-                  className="rounded-lg border border-slate-300 px-4 py-2 text-slate-700 transition hover:border-slate-950 hover:text-slate-950"
+                  className="rounded-lg border border-slate-300 px-4 py-2 transition hover:border-slate-950 hover:text-slate-950"
                 >
                   Log out
                 </button>
