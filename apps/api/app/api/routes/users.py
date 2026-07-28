@@ -3,7 +3,6 @@ from fastapi import APIRouter
 from app.api.dependencies.auth import CurrentUser
 from app.schemas import UserResponse
 
-
 router = APIRouter(
     prefix="/api/v1/users",
     tags=["Users"],

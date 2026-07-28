@@ -4,7 +4,6 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from app.core.database import check_database_connection
 
-
 router = APIRouter(tags=["Health"])
 
 

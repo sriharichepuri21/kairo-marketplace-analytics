@@ -10,7 +10,6 @@ from pydantic import (
     SecretStr,
 )
 
-
 UserRole = Literal[
     "customer",
     "seller",

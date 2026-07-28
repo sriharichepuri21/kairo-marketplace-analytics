@@ -9,7 +9,6 @@ from app.core.database import SessionLocal
 from app.main import app
 from app.models import User
 
-
 client = TestClient(app)
 
 

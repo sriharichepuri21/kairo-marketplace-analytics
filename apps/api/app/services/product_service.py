@@ -56,9 +56,7 @@ class ProductService:
             image_url=cls._primary_image(product),
             available_quantity=available_quantity,
             in_stock=available_quantity > 0,
-            category=CategorySummary.model_validate(
-                product.category
-            ),
+            category=CategorySummary.model_validate(product.category),
         )
 
     @classmethod
@@ -68,9 +66,7 @@ class ProductService:
     ) -> ProductDetailResponse:
         available_quantity = cls._available_quantity(product)
         reserved_quantity = (
-            product.inventory.reserved_quantity
-            if product.inventory is not None
-            else 0
+            product.inventory.reserved_quantity if product.inventory is not None else 0
         )
 
         return ProductDetailResponse(
@@ -84,13 +80,8 @@ class ProductService:
             effective_price=cls._effective_price(product),
             average_rating=product.average_rating,
             is_active=product.is_active,
-            category=CategorySummary.model_validate(
-                product.category
-            ),
-            images=[
-                ProductImageResponse.model_validate(image)
-                for image in product.images
-            ],
+            category=CategorySummary.model_validate(product.category),
+            images=[ProductImageResponse.model_validate(image) for image in product.images],
             inventory=InventoryResponse(
                 available_quantity=available_quantity,
                 reserved_quantity=reserved_quantity,
@@ -129,11 +120,7 @@ class ProductService:
         page: int,
         page_size: int,
     ) -> ProductPageResponse:
-        if (
-            min_price is not None
-            and max_price is not None
-            and min_price > max_price
-        ):
+        if min_price is not None and max_price is not None and min_price > max_price:
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                 detail="min_price cannot be greater than max_price.",
@@ -152,17 +139,10 @@ class ProductService:
             page_size=page_size,
         )
 
-        total_pages = (
-            ceil(total_items / page_size)
-            if total_items > 0
-            else 0
-        )
+        total_pages = ceil(total_items / page_size) if total_items > 0 else 0
 
         return ProductPageResponse(
-            items=[
-                cls._to_list_item(product)
-                for product in products
-            ],
+            items=[cls._to_list_item(product) for product in products],
             page=page,
             page_size=page_size,
             total_items=total_items,

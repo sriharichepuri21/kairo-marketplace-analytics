@@ -1,4 +1,11 @@
 from app.schemas.auth import TokenResponse
+from app.schemas.cart import (
+    CartItemCreate,
+    CartItemResponse,
+    CartItemUpdate,
+    CartProductResponse,
+    CartResponse,
+)
 from app.schemas.category import CategoryResponse, CategorySummary
 from app.schemas.product import (
     InventoryResponse,
@@ -7,14 +14,14 @@ from app.schemas.product import (
     ProductListItem,
     ProductPageResponse,
 )
-from app.schemas.user import (
-    UserCreate,
-    UserResponse,
-    UserRole,
-)
-
+from app.schemas.user import UserCreate, UserResponse, UserRole
 
 __all__ = [
+    "CartItemCreate",
+    "CartItemResponse",
+    "CartItemUpdate",
+    "CartProductResponse",
+    "CartResponse",
     "CategoryResponse",
     "CategorySummary",
     "InventoryResponse",

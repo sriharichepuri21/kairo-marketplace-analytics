@@ -19,8 +19,7 @@ class ProductRepository:
             )
             .outerjoin(
                 Product,
-                (Product.category_id == Category.id)
-                & Product.is_active.is_(True),
+                (Product.category_id == Category.id) & Product.is_active.is_(True),
             )
             .group_by(Category.id)
             .order_by(Category.name.asc())
@@ -28,10 +27,7 @@ class ProductRepository:
 
         rows = database.execute(statement).all()
 
-        return [
-            (category, int(product_count))
-            for category, product_count in rows
-        ]
+        return [(category, int(product_count)) for category, product_count in rows]
 
     @staticmethod
     def get_product_by_id(
@@ -118,9 +114,7 @@ class ProductRepository:
             .where(*filters)
         )
 
-        total_items = int(
-            database.scalar(count_statement) or 0
-        )
+        total_items = int(database.scalar(count_statement) or 0)
 
         statement: Select[tuple[Product]] = (
             select(Product)
@@ -146,8 +140,7 @@ class ProductRepository:
         }
 
         statement = (
-            statement
-            .order_by(
+            statement.order_by(
                 sort_options.get(sort, Product.created_at.desc()),
                 Product.id.asc(),
             )

@@ -4,7 +4,6 @@ from fastapi.testclient import TestClient
 
 from app.main import app
 
-
 client = TestClient(app)
 
 
@@ -154,7 +153,7 @@ def test_filter_products_by_price_range() -> None:
     for item in items:
         effective_price = Decimal(item["effective_price"])
 
-        assert Decimal("3000") <= effective_price <= Decimal("5000")
+        assert Decimal(3000) <= effective_price <= Decimal(5000)
 
 
 def test_sort_products_by_effective_price() -> None:

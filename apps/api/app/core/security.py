@@ -1,11 +1,10 @@
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
 import jwt
 from pwdlib import PasswordHash
 
 from app.core.config import get_settings
-
 
 settings = get_settings()
 password_hasher = PasswordHash.recommended()
@@ -28,7 +27,7 @@ def verify_password(
 def create_access_token(
     subject: UUID,
 ) -> str:
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
 
     expires_at = now + timedelta(
         minutes=settings.access_token_expire_minutes,
