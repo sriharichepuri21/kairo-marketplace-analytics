@@ -1,0 +1,45 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: kairo-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: kairo
+      POSTGRES_PASSWORD: kairo_dev_password
+      POSTGRES_DB: kairo_app
+    volumes:
+      - kairo_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U kairo -d kairo_app"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build:
+      context: ./apps/api
+    container_name: kairo-api
+    restart: unless-stopped
+    environment:
+      APP_NAME: Kairo Marketplace API
+      APP_VERSION: 0.1.0
+      ENVIRONMENT: development
+      DATABASE_URL: postgresql+psycopg://kairo:kairo_dev_password@postgres:5432/kairo_app
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./apps/api:/app
+    command:
+      - uvicorn
+      - app.main:app
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8000"
+      - --reload
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  kairo_postgres_data:
