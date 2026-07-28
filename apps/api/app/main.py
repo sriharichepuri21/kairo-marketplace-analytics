@@ -20,7 +20,9 @@ class RootResponse(BaseModel):
 app = FastAPI(
     title=settings.app_name,
     version=settings.app_version,
-    description=("Backend API for the Kairo marketplace shopping application."),
+    description=(
+        "Backend API for the Kairo marketplace shopping application."
+    ),
 )
 
 app.include_router(health_router)
