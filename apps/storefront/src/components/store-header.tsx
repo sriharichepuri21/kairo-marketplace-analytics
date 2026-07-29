@@ -1,9 +1,24 @@
 import Link from "next/link";
 
-export function StoreHeader() {
+import { getCurrentUser } from "@/lib/auth-server";
+import { getCart } from "@/lib/cart-server";
+
+
+export async function StoreHeader() {
+  const currentUser = await getCurrentUser();
+
+  const cart = currentUser
+    ? await getCart()
+    : null;
+
+  const firstName =
+    currentUser?.full_name
+      .trim()
+      .split(/\s+/)[0] ?? null;
+
   return (
     <header className="border-b border-slate-200 bg-white">
-      <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-5">
+      <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-5 px-6 py-5">
         <Link href="/" className="block">
           <p className="text-2xl font-bold tracking-tight text-slate-950">
             Kairo
@@ -14,22 +29,74 @@ export function StoreHeader() {
           </p>
         </Link>
 
-        <nav className="flex items-center gap-6 text-sm font-medium text-slate-600">
-          <Link href="/" className="transition hover:text-slate-950">
+        <nav className="flex flex-wrap items-center justify-end gap-5 text-sm font-medium text-slate-600">
+          <Link
+            href="/"
+            className="transition hover:text-slate-950"
+          >
             Shop
           </Link>
 
-          <a href="#catalogue" className="transition hover:text-slate-950">
+          <Link
+            href="/#catalogue"
+            className="transition hover:text-slate-950"
+          >
             Categories
-          </a>
+          </Link>
 
           <span className="cursor-not-allowed text-slate-400">
             Orders
           </span>
 
-          <span className="cursor-not-allowed text-slate-400">
+          <Link
+            href={
+              currentUser
+                ? "/cart"
+                : "/login?next=/cart"
+            }
+            className="transition hover:text-slate-950"
+          >
             Cart
-          </span>
+            {cart && cart.total_quantity > 0
+              ? ` (${cart.total_quantity})`
+              : ""}
+          </Link>
+
+          {currentUser ? (
+            <>
+              <span className="text-slate-950">
+                Hi, {firstName}
+              </span>
+
+              <form
+                action="/api/auth/logout"
+                method="post"
+              >
+                <button
+                  type="submit"
+                  className="rounded-lg border border-slate-300 px-4 py-2 transition hover:border-slate-950 hover:text-slate-950"
+                >
+                  Log out
+                </button>
+              </form>
+            </>
+          ) : (
+            <>
+              <Link
+                href="/login"
+                className="transition hover:text-slate-950"
+              >
+                Log in
+              </Link>
+
+              <Link
+                href="/register"
+                className="rounded-lg bg-slate-950 px-4 py-2 text-white transition hover:bg-slate-800"
+              >
+                Register
+              </Link>
+            </>
+          )}
         </nav>
       </div>
     </header>

@@ -187,33 +187,60 @@ export default async function ProductPage({
               )}
             </div>
 
-            <div className="mt-8 grid gap-4 sm:grid-cols-[120px_1fr]">
+            <form
+              action="/api/cart"
+              method="post"
+              className="mt-8 grid gap-4 sm:grid-cols-[120px_1fr]"
+            >
+              <input
+                type="hidden"
+                name="action"
+                value="add"
+              />
+
+              <input
+                type="hidden"
+                name="product_id"
+                value={product.id}
+              />
+
+              <input
+                type="hidden"
+                name="return_to"
+                value={`/products/${product.id}`}
+              />
+
               <label>
                 <span className="mb-2 block text-sm font-medium text-slate-700">
                   Quantity
                 </span>
 
                 <select
+                  name="quantity"
                   defaultValue="1"
                   disabled={!product.inventory.in_stock}
                   className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 disabled:bg-slate-100"
                 >
-                  {Array.from(
-                    {
-                      length: Math.min(
-                        product.inventory.available_quantity,
-                        5,
-                      ),
-                    },
-                    (_, index) => index + 1,
-                  ).map((quantity) => (
-                    <option
-                      key={quantity}
-                      value={quantity}
-                    >
-                      {quantity}
-                    </option>
-                  ))}
+                  {product.inventory.in_stock ? (
+                    Array.from(
+                      {
+                        length: Math.min(
+                          product.inventory.available_quantity,
+                          5,
+                        ),
+                      },
+                      (_, index) => index + 1,
+                    ).map((quantity) => (
+                      <option
+                        key={quantity}
+                        value={quantity}
+                      >
+                        {quantity}
+                      </option>
+                    ))
+                  ) : (
+                    <option>Unavailable</option>
+                  )}
                 </select>
               </label>
 
@@ -223,15 +250,20 @@ export default async function ProductPage({
                 </span>
 
                 <button
-                  type="button"
-                  disabled
-                  title="Cart functionality will be added in the next milestone."
-                  className="w-full cursor-not-allowed rounded-xl bg-slate-300 px-6 py-3 font-semibold text-slate-600"
+                  type="submit"
+                  disabled={!product.inventory.in_stock}
+                  className={
+                    product.inventory.in_stock
+                      ? "w-full rounded-xl bg-slate-950 px-6 py-3 font-semibold text-white transition hover:bg-slate-800"
+                      : "w-full cursor-not-allowed rounded-xl bg-slate-300 px-6 py-3 font-semibold text-slate-600"
+                  }
                 >
-                  Add to cart — coming next
+                  {product.inventory.in_stock
+                    ? "Add to cart"
+                    : "Out of stock"}
                 </button>
               </div>
-            </div>
+            </form>
           </section>
         </div>
       </div>
