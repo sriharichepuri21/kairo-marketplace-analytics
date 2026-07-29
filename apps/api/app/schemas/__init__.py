@@ -15,6 +15,13 @@ from app.schemas.category import (
     CategoryResponse,
     CategorySummary,
 )
+from app.schemas.order import (
+    CheckoutRequest,
+    OrderItemResponse,
+    OrderResponse,
+    OrderShippingAddressResponse,
+    OrderStatusHistoryResponse,
+)
 from app.schemas.product import (
     InventoryResponse,
     ProductDetailResponse,
@@ -39,7 +46,12 @@ __all__ = [
     "CartResponse",
     "CategoryResponse",
     "CategorySummary",
+    "CheckoutRequest",
     "InventoryResponse",
+    "OrderItemResponse",
+    "OrderResponse",
+    "OrderShippingAddressResponse",
+    "OrderStatusHistoryResponse",
     "ProductDetailResponse",
     "ProductImageResponse",
     "ProductListItem",
