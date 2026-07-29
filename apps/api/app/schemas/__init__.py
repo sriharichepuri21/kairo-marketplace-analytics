@@ -1,3 +1,8 @@
+from app.schemas.address import (
+    AddressCreate,
+    AddressResponse,
+    AddressUpdate,
+)
 from app.schemas.auth import TokenResponse
 from app.schemas.cart import (
     CartItemCreate,
@@ -6,7 +11,10 @@ from app.schemas.cart import (
     CartProductResponse,
     CartResponse,
 )
-from app.schemas.category import CategoryResponse, CategorySummary
+from app.schemas.category import (
+    CategoryResponse,
+    CategorySummary,
+)
 from app.schemas.product import (
     InventoryResponse,
     ProductDetailResponse,
@@ -14,9 +22,16 @@ from app.schemas.product import (
     ProductListItem,
     ProductPageResponse,
 )
-from app.schemas.user import UserCreate, UserResponse, UserRole
+from app.schemas.user import (
+    UserCreate,
+    UserResponse,
+    UserRole,
+)
 
 __all__ = [
+    "AddressCreate",
+    "AddressResponse",
+    "AddressUpdate",
     "CartItemCreate",
     "CartItemResponse",
     "CartItemUpdate",
