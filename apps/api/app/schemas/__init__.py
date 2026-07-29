@@ -11,6 +11,11 @@ from app.schemas.cart import (
     CartProductResponse,
     CartResponse,
 )
+from app.schemas.customer_event import (
+    CustomerEventCreate,
+    CustomerEventResponse,
+    EventType,
+)
 from app.schemas.category import (
     CategoryResponse,
     CategorySummary,
@@ -46,6 +51,9 @@ __all__ = [
     "CartResponse",
     "CategoryResponse",
     "CategorySummary",
+    "EventType",
+    "CustomerEventResponse",
+    "CustomerEventCreate",
     "CheckoutRequest",
     "InventoryResponse",
     "OrderItemResponse",
