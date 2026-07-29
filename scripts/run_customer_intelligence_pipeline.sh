@@ -99,13 +99,9 @@ echo "[6/6] Synchronizing scores to PostgreSQL..."
 bash \
   scripts/sync_live_churn_scores_to_postgres.sh
 
-echo
-echo "============================================================"
-echo "PIPELINE COMPLETED SUCCESSFULLY"
-echo "============================================================"
-
 docker compose exec -T api python - <<'PY'
 from sqlalchemy import (
+    Integer,
     func,
     select,
 )
@@ -144,7 +140,7 @@ try:
             func.sum(
                 CustomerChurnScore
                 .predicted_churn_flag
-                .cast(int)
+                .cast(Integer)
             ),
             func.avg(
                 CustomerChurnScore
@@ -189,6 +185,10 @@ finally:
     database.close()
 PY
 
+echo
+echo "============================================================"
+echo "PIPELINE COMPLETED SUCCESSFULLY"
+echo "============================================================"
 echo
 echo "Dashboard:"
 echo "http://localhost:3001/admin/churn"
