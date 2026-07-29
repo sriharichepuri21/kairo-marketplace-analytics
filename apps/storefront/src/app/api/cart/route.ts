@@ -4,7 +4,7 @@ import {
   readApiError,
   safeRedirectPath,
 } from "@/lib/auth-server";
-import { requestCartApi } from "@/lib/cart-server";
+import { requestAuthenticatedApi } from "@/lib/api-server";
 
 
 type CartAction =
@@ -172,7 +172,7 @@ export async function POST(
   let response: Response | null;
 
   try {
-    response = await requestCartApi(pathname, {
+    response = await requestAuthenticatedApi(pathname, {
       method,
       headers:
         body !== undefined
