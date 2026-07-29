@@ -277,13 +277,12 @@ export default async function CartPage({
                 </div>
               </div>
 
-              <button
-                type="button"
-                disabled
-                className="mt-7 w-full cursor-not-allowed rounded-xl bg-slate-300 px-5 py-3 font-semibold text-slate-600"
+              <Link
+                href="/checkout"
+                className="mt-7 block w-full rounded-xl bg-slate-950 px-5 py-3 text-center font-semibold text-white transition hover:bg-slate-800"
               >
-                Checkout — coming next
-              </button>
+                Proceed to checkout
+              </Link>
 
               <form
                 action="/api/cart"

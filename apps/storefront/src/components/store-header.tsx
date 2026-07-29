@@ -53,9 +53,16 @@ export async function StoreHeader() {
             </Link>
           ) : null}
 
-          <span className="cursor-not-allowed text-slate-400">
+          <Link
+            href={
+              currentUser
+                ? "/orders"
+                : "/login?next=/orders"
+            }
+            className="transition hover:text-slate-950"
+          >
             Orders
-          </span>
+          </Link>
 
           <Link
             href={
