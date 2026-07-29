@@ -1,4 +1,5 @@
 import { CatalogueFilters } from "@/components/catalog-filters";
+import { CustomerEventTracker } from "@/components/customer-event-tracker";
 import { Pagination } from "@/components/pagination";
 import { ProductCard } from "@/components/product-card";
 import { StoreHeader } from "@/components/store-header";
@@ -138,9 +139,43 @@ export default async function Home({
 
   const { catalogue, categories } = data;
 
+  const searchEventKey = [
+    filters.search ?? "",
+    filters.category ?? "",
+    filters.brand ?? "",
+    filters.minPrice ?? "",
+    filters.maxPrice ?? "",
+    String(filters.inStock),
+    filters.sort ?? "",
+  ].join("|");
+
   return (
     <main className="min-h-screen bg-slate-50 text-slate-950">
       <StoreHeader />
+
+      {filters.search ? (
+        <CustomerEventTracker
+          dedupeKey={`product-search:${searchEventKey}`}
+          event={{
+            event_type: "product_search",
+            properties: {
+              query: filters.search,
+              result_count:
+                catalogue.total_items,
+              category:
+                filters.category,
+              brand: filters.brand,
+              minimum_price:
+                filters.minPrice,
+              maximum_price:
+                filters.maxPrice,
+              in_stock_only:
+                filters.inStock,
+              sort: filters.sort,
+            },
+          }}
+        />
+      ) : null}
 
       <section className="border-b border-slate-200 bg-slate-950 text-white">
         <div className="mx-auto max-w-7xl px-6 py-16">

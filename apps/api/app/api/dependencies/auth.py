@@ -19,10 +19,15 @@ oauth2_scheme = OAuth2PasswordBearer(
     tokenUrl="/api/v1/auth/login",
 )
 
+optional_oauth2_scheme = OAuth2PasswordBearer(
+    tokenUrl="/api/v1/auth/login",
+    auto_error=False,
+)
 
-def get_current_user(
-    token: Annotated[str, Depends(oauth2_scheme)],
-    database: Annotated[Session, Depends(get_db)],
+
+def resolve_current_user(
+    token: str,
+    database: Session,
 ) -> User:
     credentials_error = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
@@ -58,7 +63,58 @@ def get_current_user(
     return user
 
 
+def get_current_user(
+    token: Annotated[str, Depends(oauth2_scheme)],
+    database: Annotated[Session, Depends(get_db)],
+) -> User:
+    return resolve_current_user(
+        token,
+        database,
+    )
+
+
+def get_optional_current_user(
+    token: Annotated[
+        str | None,
+        Depends(optional_oauth2_scheme),
+    ],
+    database: Annotated[Session, Depends(get_db)],
+) -> User | None:
+    if token is None:
+        return None
+
+    return resolve_current_user(
+        token,
+        database,
+    )
+
+
 CurrentUser = Annotated[
     User,
     Depends(get_current_user),
+]
+
+OptionalCurrentUser = Annotated[
+    User | None,
+    Depends(get_optional_current_user),
+]
+
+
+def require_admin(
+    current_user: CurrentUser,
+) -> User:
+    """Allow only active users with the admin role."""
+
+    if current_user.role != "admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Administrator access is required.",
+        )
+
+    return current_user
+
+
+AdminUser = Annotated[
+    User,
+    Depends(require_admin),
 ]

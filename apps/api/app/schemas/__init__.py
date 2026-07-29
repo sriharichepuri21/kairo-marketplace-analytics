@@ -15,6 +15,16 @@ from app.schemas.category import (
     CategoryResponse,
     CategorySummary,
 )
+from app.schemas.customer_churn_score import (
+    CustomerChurnScorePage,
+    CustomerChurnScoreResponse,
+    CustomerChurnSummaryResponse,
+)
+from app.schemas.customer_event import (
+    CustomerEventCreate,
+    CustomerEventResponse,
+    EventType,
+)
 from app.schemas.order import (
     CheckoutRequest,
     OrderItemResponse,
@@ -47,6 +57,12 @@ __all__ = [
     "CategoryResponse",
     "CategorySummary",
     "CheckoutRequest",
+    "CustomerChurnScorePage",
+    "CustomerChurnScoreResponse",
+    "CustomerChurnSummaryResponse",
+    "CustomerEventCreate",
+    "CustomerEventResponse",
+    "EventType",
     "InventoryResponse",
     "OrderItemResponse",
     "OrderResponse",

@@ -2,8 +2,10 @@ from fastapi import FastAPI
 from pydantic import BaseModel
 
 from app.api.routes.addresses import router as addresses_router
+from app.api.routes.admin_churn import router as admin_churn_router
 from app.api.routes.auth import router as auth_router
 from app.api.routes.cart import router as cart_router
+from app.api.routes.customer_events import router as customer_events_router
 from app.api.routes.health import router as health_router
 from app.api.routes.orders import router as orders_router
 from app.api.routes.products import router as products_router
@@ -30,7 +32,9 @@ app.include_router(products_router)
 app.include_router(auth_router)
 app.include_router(users_router)
 app.include_router(addresses_router)
+app.include_router(admin_churn_router)
 app.include_router(cart_router)
+app.include_router(customer_events_router)
 app.include_router(orders_router)
 
 

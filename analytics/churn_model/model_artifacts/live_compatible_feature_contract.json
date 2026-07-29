@@ -1,0 +1,20 @@
+{
+  "model_name": "live_compatible_behavioral",
+  "model_version": "kairo_churn_live_v2",
+  "probability_threshold": 0.3,
+  "scoring_eligibility": "total_orders >= 1",
+  "live_source_model": "mart_customer_features",
+  "feature_columns": [
+    "days_since_last_order",
+    "total_orders",
+    "orders_last_30d",
+    "orders_last_90d",
+    "account_age_days",
+    "is_single_order_customer"
+  ],
+  "historical_column_mapping": {
+    "avg_order_value": "average_order_value",
+    "customer_tenure_days": "account_age_days"
+  },
+  "excluded_live_customers": "Customers with zero orders are prospects, not churn candidates."
+}

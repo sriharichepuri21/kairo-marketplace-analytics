@@ -2,6 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import { CustomerEventTracker } from "@/components/customer-event-tracker";
 import { StoreHeader } from "@/components/store-header";
 import { getProduct } from "@/lib/api";
 import { formatPrice } from "@/lib/format";
@@ -76,6 +77,22 @@ export default async function ProductPage({
   return (
     <main className="min-h-screen bg-slate-50 text-slate-950">
       <StoreHeader />
+
+      <CustomerEventTracker
+        dedupeKey={`product-view:${product.id}`}
+        event={{
+          event_type: "product_view",
+          product_id: product.id,
+          properties: {
+            source: "product_detail",
+            product_name: product.name,
+            brand: product.brand,
+            category: product.category.name,
+            effective_price:
+              product.effective_price,
+          },
+        }}
+      />
 
       <div className="mx-auto max-w-7xl px-6 py-10">
         <Link

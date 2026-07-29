@@ -1,0 +1,64 @@
+version: 2
+
+models:
+  - name: int_customer_daily_activity
+    description: >
+      Daily behavioral activity at the customer
+      or anonymous-session grain.
+    columns:
+      - name: actor_id
+        data_tests:
+          - not_null
+
+      - name: event_date
+        data_tests:
+          - not_null
+
+      - name: total_events
+        data_tests:
+          - not_null
+
+  - name: mart_customer_funnel
+    description: >
+      Customer conversion funnel summarized by
+      authenticated or anonymous actor type.
+    columns:
+      - name: analysis_as_of_date
+        data_tests:
+          - not_null
+
+      - name: actor_type
+        data_tests:
+          - not_null
+          - unique
+          - accepted_values:
+              arguments:
+                values:
+                  - authenticated
+                  - anonymous
+
+  - name: mart_customer_features
+    description: >
+      One row per marketplace customer containing
+      behavioral and transactional model features.
+    columns:
+      - name: feature_snapshot_date
+        data_tests:
+          - not_null
+
+      - name: user_id
+        data_tests:
+          - not_null
+          - unique
+
+      - name: email
+        data_tests:
+          - not_null
+
+      - name: total_orders
+        data_tests:
+          - not_null
+
+      - name: lifetime_spend
+        data_tests:
+          - not_null
