@@ -15,7 +15,6 @@ from app.core.security import decode_access_token
 from app.models import User
 from app.repositories import UserRepository
 
-
 oauth2_scheme = OAuth2PasswordBearer(
     tokenUrl="/api/v1/auth/login",
 )
@@ -98,4 +97,24 @@ CurrentUser = Annotated[
 OptionalCurrentUser = Annotated[
     User | None,
     Depends(get_optional_current_user),
+]
+
+
+def require_admin(
+    current_user: CurrentUser,
+) -> User:
+    """Allow only active users with the admin role."""
+
+    if current_user.role != "admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Administrator access is required.",
+        )
+
+    return current_user
+
+
+AdminUser = Annotated[
+    User,
+    Depends(require_admin),
 ]

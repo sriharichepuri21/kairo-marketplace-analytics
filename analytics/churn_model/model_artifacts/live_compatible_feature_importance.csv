@@ -1,0 +1,7 @@
+feature,coefficient,absolute_coefficient,direction
+numeric__total_orders,-0.9732454264662188,0.9732454264662188,decreases_churn_risk
+numeric__account_age_days,0.6142598831176087,0.6142598831176087,increases_churn_risk
+binary__is_single_order_customer,0.2742114844713899,0.2742114844713899,increases_churn_risk
+numeric__orders_last_30d,-0.07599441970002191,0.07599441970002191,decreases_churn_risk
+numeric__days_since_last_order,-0.0044559177806833584,0.0044559177806833584,decreases_churn_risk
+numeric__orders_last_90d,-0.0010933622074077458,0.0010933622074077458,decreases_churn_risk

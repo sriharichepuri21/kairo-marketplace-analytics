@@ -1,0 +1,96 @@
+{
+  "model_name": "live_compatible_behavioral",
+  "model_version": "kairo_churn_live_v2",
+  "selected_class_weight": "none",
+  "selection_rule": "Highest validation PR-AUC, then validation top-20% recall, then validation ROC-AUC.",
+  "feature_columns": [
+    "days_since_last_order",
+    "total_orders",
+    "orders_last_30d",
+    "orders_last_90d",
+    "account_age_days",
+    "is_single_order_customer"
+  ],
+  "validation": {
+    "rows": 148272,
+    "churners": 40590,
+    "churn_rate": 0.27375364195532537,
+    "roc_auc": 0.7377237662395383,
+    "pr_auc": 0.4968263201619458,
+    "brier_score": 0.17373372115506255,
+    "threshold": 0.3,
+    "precision": 0.41494439961154955,
+    "recall": 0.7474008376447401,
+    "f1": 0.5336276725798366,
+    "confusion_matrix": {
+      "true_negative": 64908,
+      "false_positive": 42774,
+      "false_negative": 10253,
+      "true_positive": 30337
+    },
+    "top_10_percent": {
+      "fraction": 0.1,
+      "customers": 14828,
+      "captured_churners": 8790,
+      "precision": 0.5927974103048287,
+      "recall": 0.21655580192165558,
+      "lift": 2.1654411830676903
+    },
+    "top_20_percent": {
+      "fraction": 0.2,
+      "customers": 29655,
+      "captured_churners": 15446,
+      "precision": 0.5208565166076546,
+      "recall": 0.3805370780980537,
+      "lift": 1.9026468940736676
+    }
+  },
+  "test": {
+    "rows": 172352,
+    "churners": 39654,
+    "churn_rate": 0.23007565911622727,
+    "roc_auc": 0.773183078201341,
+    "pr_auc": 0.4810988634557377,
+    "brier_score": 0.15737963019534937,
+    "threshold": 0.3,
+    "precision": 0.3822539285150031,
+    "recall": 0.7931860594139305,
+    "f1": 0.5158893526985247,
+    "confusion_matrix": {
+      "true_negative": 81868,
+      "false_positive": 50830,
+      "false_negative": 8201,
+      "true_positive": 31453
+    },
+    "top_10_percent": {
+      "fraction": 0.1,
+      "customers": 17236,
+      "captured_churners": 9753,
+      "precision": 0.5658505453701554,
+      "recall": 0.24595248903011047,
+      "lift": 2.4594107327290318
+    },
+    "top_20_percent": {
+      "fraction": 0.2,
+      "customers": 34471,
+      "captured_churners": 16866,
+      "precision": 0.48928084476806594,
+      "recall": 0.42532909668633684,
+      "lift": 2.12660846717773
+    }
+  },
+  "candidate_results": [
+    {
+      "class_weight": "none",
+      "validation_pr_auc": 0.4968263201619458,
+      "validation_roc_auc": 0.7377237662395383,
+      "validation_top_20_recall": 0.3805370780980537
+    },
+    {
+      "class_weight": "balanced",
+      "validation_pr_auc": 0.49620076063472385,
+      "validation_roc_auc": 0.7378315455169456,
+      "validation_top_20_recall": 0.3797979797979798
+    }
+  ]
+}
