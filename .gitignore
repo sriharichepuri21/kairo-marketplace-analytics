@@ -81,3 +81,6 @@ warehouse/*
 !warehouse/
 warehouse/*
 !warehouse/kairo_dashboard.duckdb
+
+# dbt runtime artifacts created from repository-root commands
+/logs/

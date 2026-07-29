@@ -25,3 +25,5 @@ models:
 
 vars:
   analysis_as_of_date: '2025-12-31'
+  operational_export_dir: 'warehouse/operational'
+  operational_analysis_as_of_date: '2026-07-29'
