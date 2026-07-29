@@ -6,6 +6,9 @@ import {
 import {
   requestAuthenticatedApi,
 } from "@/lib/api-server";
+import {
+  recordCustomerEvent,
+} from "@/lib/customer-event-server";
 import type { Order } from "@/lib/order-types";
 
 
@@ -150,6 +153,31 @@ export async function POST(
       status: 303,
     });
   }
+
+  const itemCount = Array.isArray(
+    order.items,
+  )
+    ? order.items.reduce(
+        (total, item) =>
+          total + item.quantity,
+        0,
+      )
+    : null;
+
+  await recordCustomerEvent({
+    event_type: "order_placed",
+    order_id: order.id,
+    properties: {
+      order_number:
+        order.order_number ?? null,
+      total_amount:
+        order.total_amount ?? null,
+      currency_code:
+        order.currency_code ?? null,
+      item_count: itemCount,
+      source: "storefront_checkout",
+    },
+  });
 
   const orderUrl = new URL(
     `/orders/${order.id}`,

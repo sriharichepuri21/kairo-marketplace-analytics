@@ -2,6 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
+import { CheckoutLink } from "@/components/checkout-link";
 import { StoreHeader } from "@/components/store-header";
 import { getCurrentUser } from "@/lib/auth-server";
 import { getCart } from "@/lib/cart-server";
@@ -277,12 +278,7 @@ export default async function CartPage({
                 </div>
               </div>
 
-              <Link
-                href="/checkout"
-                className="mt-7 block w-full rounded-xl bg-slate-950 px-5 py-3 text-center font-semibold text-white transition hover:bg-slate-800"
-              >
-                Proceed to checkout
-              </Link>
+              <CheckoutLink />
 
               <form
                 action="/api/cart"

@@ -1,10 +1,18 @@
 import { NextResponse } from "next/server";
 
 import {
+  requestAuthenticatedApi,
+} from "@/lib/api-server";
+import {
   readApiError,
   safeRedirectPath,
 } from "@/lib/auth-server";
-import { requestAuthenticatedApi } from "@/lib/api-server";
+import {
+  recordCustomerEvent,
+} from "@/lib/customer-event-server";
+import type {
+  CustomerEventInput,
+} from "@/lib/customer-event-types";
 
 
 type CartAction =
@@ -12,6 +20,20 @@ type CartAction =
   | "update"
   | "remove"
   | "clear";
+
+
+interface CartSnapshotItem {
+  id: string;
+  quantity: number;
+  product: {
+    id: string;
+  };
+}
+
+
+interface CartSnapshot {
+  items: CartSnapshotItem[];
+}
 
 
 function getFormString(
@@ -42,6 +64,35 @@ function redirectWithMessage(
 }
 
 
+async function loadCartSnapshot(): Promise<
+  CartSnapshot | null
+> {
+  try {
+    const response =
+      await requestAuthenticatedApi(
+        "/api/v1/cart",
+      );
+
+    if (!response?.ok) {
+      return null;
+    }
+
+    return response.json() as Promise<CartSnapshot>;
+  } catch {
+    return null;
+  }
+}
+
+
+async function recordCartEvents(
+  events: CustomerEventInput[],
+): Promise<void> {
+  for (const event of events) {
+    await recordCustomerEvent(event);
+  }
+}
+
+
 export async function POST(
   request: Request,
 ): Promise<NextResponse> {
@@ -61,14 +112,18 @@ export async function POST(
   let body: string | undefined;
   let successMessage: string;
 
+  let productId = "";
+  let itemId = "";
+  let quantity = 0;
+
   switch (action) {
     case "add": {
-      const productId = getFormString(
+      productId = getFormString(
         formData,
         "product_id",
       );
 
-      const quantity = Number(
+      quantity = Number(
         getFormString(formData, "quantity"),
       );
 
@@ -98,12 +153,12 @@ export async function POST(
     }
 
     case "update": {
-      const itemId = getFormString(
+      itemId = getFormString(
         formData,
         "item_id",
       );
 
-      const quantity = Number(
+      quantity = Number(
         getFormString(formData, "quantity"),
       );
 
@@ -120,7 +175,8 @@ export async function POST(
         );
       }
 
-      pathname = `/api/v1/cart/items/${itemId}`;
+      pathname =
+        `/api/v1/cart/items/${itemId}`;
       method = "PATCH";
       body = JSON.stringify({ quantity });
       successMessage = "Cart updated.";
@@ -129,7 +185,7 @@ export async function POST(
     }
 
     case "remove": {
-      const itemId = getFormString(
+      itemId = getFormString(
         formData,
         "item_id",
       );
@@ -143,7 +199,8 @@ export async function POST(
         );
       }
 
-      pathname = `/api/v1/cart/items/${itemId}`;
+      pathname =
+        `/api/v1/cart/items/${itemId}`;
       method = "DELETE";
       body = undefined;
       successMessage =
@@ -156,7 +213,8 @@ export async function POST(
       pathname = "/api/v1/cart";
       method = "DELETE";
       body = undefined;
-      successMessage = "Your cart was cleared.";
+      successMessage =
+        "Your cart was cleared.";
 
       break;
 
@@ -169,19 +227,33 @@ export async function POST(
       );
   }
 
+  const requiresSnapshot =
+    action === "update" ||
+    action === "remove" ||
+    action === "clear";
+
+  const cartBeforeMutation =
+    requiresSnapshot
+      ? await loadCartSnapshot()
+      : null;
+
   let response: Response | null;
 
   try {
-    response = await requestAuthenticatedApi(pathname, {
-      method,
-      headers:
-        body !== undefined
-          ? {
-              "Content-Type": "application/json",
-            }
-          : undefined,
-      body,
-    });
+    response = await requestAuthenticatedApi(
+      pathname,
+      {
+        method,
+        headers:
+          body !== undefined
+            ? {
+                "Content-Type":
+                  "application/json",
+              }
+            : undefined,
+        body,
+      },
+    );
   } catch {
     return redirectWithMessage(
       request,
@@ -218,6 +290,110 @@ export async function POST(
       ),
     );
   }
+
+  const events: CustomerEventInput[] = [];
+
+  if (action === "add") {
+    events.push({
+      event_type: "add_to_cart",
+      product_id: productId,
+      properties: {
+        quantity,
+        source: returnTo.startsWith(
+          "/products/",
+        )
+          ? "product_detail"
+          : "storefront",
+      },
+    });
+  }
+
+  if (
+    action === "update" &&
+    cartBeforeMutation
+  ) {
+    const previousItem =
+      cartBeforeMutation.items.find(
+        (item) => item.id === itemId,
+      );
+
+    if (previousItem) {
+      const difference =
+        quantity - previousItem.quantity;
+
+      if (difference > 0) {
+        events.push({
+          event_type: "add_to_cart",
+          product_id:
+            previousItem.product.id,
+          properties: {
+            quantity: difference,
+            final_quantity: quantity,
+            source:
+              "cart_quantity_update",
+          },
+        });
+      }
+
+      if (difference < 0) {
+        events.push({
+          event_type:
+            "remove_from_cart",
+          product_id:
+            previousItem.product.id,
+          properties: {
+            quantity:
+              Math.abs(difference),
+            final_quantity: quantity,
+            source:
+              "cart_quantity_update",
+          },
+        });
+      }
+    }
+  }
+
+  if (
+    action === "remove" &&
+    cartBeforeMutation
+  ) {
+    const removedItem =
+      cartBeforeMutation.items.find(
+        (item) => item.id === itemId,
+      );
+
+    if (removedItem) {
+      events.push({
+        event_type: "remove_from_cart",
+        product_id:
+          removedItem.product.id,
+        properties: {
+          quantity: removedItem.quantity,
+          source: "cart_remove",
+        },
+      });
+    }
+  }
+
+  if (
+    action === "clear" &&
+    cartBeforeMutation
+  ) {
+    for (
+      const item of cartBeforeMutation.items
+    ) {
+      events.push({
+        event_type: "remove_from_cart",
+        product_id: item.product.id,
+        properties: {
+          quantity: item.quantity,
+          source: "cart_clear",
+        },
+      });
+    }
+  }
+
+  await recordCartEvents(events);
 
   return redirectWithMessage(
     request,
