@@ -84,3 +84,9 @@ warehouse/*
 
 # dbt runtime artifacts created from repository-root commands
 /logs/
+
+# Generated churn model binaries and prediction datasets
+analytics/churn_model/model_artifacts/*.pkl
+analytics/churn_model/model_artifacts/*.joblib
+analytics/churn_model/model_artifacts/*.parquet
+analytics/churn_model/data/*.parquet

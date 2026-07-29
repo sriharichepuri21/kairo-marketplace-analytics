@@ -1,0 +1,60 @@
+{
+  "behavioral_numeric_features": [
+    "days_since_last_order",
+    "days_since_first_order",
+    "total_orders",
+    "orders_last_30d",
+    "orders_last_90d",
+    "avg_days_between_orders",
+    "lifetime_spend",
+    "avg_order_value",
+    "spend_last_90d",
+    "spend_trend",
+    "category_count",
+    "historical_item_count",
+    "discount_order_rate",
+    "return_count",
+    "return_order_rate",
+    "return_item_rate",
+    "review_count",
+    "avg_rating_given",
+    "late_delivery_count",
+    "avg_delivery_delay",
+    "customer_tenure_days"
+  ],
+  "behavioral_binary_features": [
+    "is_single_order_customer",
+    "has_return",
+    "has_review",
+    "has_completed_delivery"
+  ],
+  "channel_features": [
+    "signup_channel"
+  ],
+  "segment_features": [
+    "segment"
+  ],
+  "primary_model_excludes_segment": true,
+  "label": "churned",
+  "id_column": "customer_id",
+  "snapshot_column": "snapshot_date",
+  "prediction_count_column": "orders_in_prediction_window",
+  "train_snapshots": [
+    "2024-12-31",
+    "2025-03-31"
+  ],
+  "validation_snapshot": "2025-06-30",
+  "test_snapshot": "2025-09-30",
+  "churn_window_days": 90,
+  "churn_definition": "No eligible order after the snapshot date and through the inclusive end of the prediction window.",
+  "minimum_historical_orders": 1,
+  "train_rows": 226740,
+  "train_unique_customers": 123844,
+  "validation_rows": 148272,
+  "validation_unique_customers": 148272,
+  "test_rows": 172352,
+  "test_unique_customers": 172352,
+  "train_churn_rate": 0.313954,
+  "validation_churn_rate": 0.273754,
+  "test_churn_rate": 0.230076
+}

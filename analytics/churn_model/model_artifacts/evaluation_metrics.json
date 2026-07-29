@@ -1,0 +1,255 @@
+{
+  "model_version": "kairo_churn_v1",
+  "selected_model": "behavioral_only",
+  "selection_rule": "Highest validation PR-AUC, then validation top-20% recall, then validation ROC-AUC.",
+  "behavioral_only": {
+    "model_name": "behavioral_only",
+    "include_channel": false,
+    "selected_class_weight": "none",
+    "feature_columns": [
+      "days_since_last_order",
+      "days_since_first_order",
+      "total_orders",
+      "orders_last_30d",
+      "orders_last_90d",
+      "avg_days_between_orders",
+      "lifetime_spend",
+      "avg_order_value",
+      "spend_last_90d",
+      "spend_trend",
+      "category_count",
+      "historical_item_count",
+      "discount_order_rate",
+      "return_count",
+      "return_order_rate",
+      "return_item_rate",
+      "review_count",
+      "avg_rating_given",
+      "late_delivery_count",
+      "avg_delivery_delay",
+      "customer_tenure_days",
+      "is_single_order_customer",
+      "has_return",
+      "has_review",
+      "has_completed_delivery"
+    ],
+    "selected_threshold": 0.3,
+    "candidate_results": [
+      {
+        "class_weight": "none",
+        "validation_pr_auc": 0.5003653788994434,
+        "validation_roc_auc": 0.739369874302406,
+        "validation_top_20_recall": 0.3841340231584134
+      },
+      {
+        "class_weight": "balanced",
+        "validation_pr_auc": 0.49950985851426827,
+        "validation_roc_auc": 0.7392273783666734,
+        "validation_top_20_recall": 0.3826558265582656
+      }
+    ],
+    "validation": {
+      "rows": 148272,
+      "churners": 40590,
+      "churn_rate": 0.27375364195532537,
+      "roc_auc": 0.739369874302406,
+      "pr_auc": 0.5003653788994434,
+      "brier_score": 0.17296494034042273,
+      "threshold": 0.3,
+      "precision": 0.415560008291301,
+      "recall": 0.7408721359940872,
+      "f1": 0.5324598291354964,
+      "predicted_positive_rate": 0.48805573540520125,
+      "predicted_positive_customers": 72365,
+      "confusion_matrix": {
+        "true_negative": 65389,
+        "false_positive": 42293,
+        "false_negative": 10518,
+        "true_positive": 30072
+      },
+      "top_10_percent": {
+        "fraction": 0.1,
+        "customers": 14828,
+        "captured_churners": 8911,
+        "precision": 0.6009576476935528,
+        "recall": 0.21953683173195368,
+        "lift": 2.195249872845983
+      },
+      "top_20_percent": {
+        "fraction": 0.2,
+        "customers": 29655,
+        "captured_churners": 15592,
+        "precision": 0.5257798010453549,
+        "recall": 0.3841340231584134,
+        "lift": 1.9206312554963503
+      }
+    },
+    "test": {
+      "rows": 172352,
+      "churners": 39654,
+      "churn_rate": 0.23007565911622727,
+      "roc_auc": 0.7757385254476421,
+      "pr_auc": 0.4865143672848681,
+      "brier_score": 0.1556228182940358,
+      "threshold": 0.3,
+      "precision": 0.38313146559658356,
+      "recall": 0.7873354516568316,
+      "f1": 0.5154404299051534,
+      "predicted_positive_rate": 0.47280565354623094,
+      "predicted_positive_customers": 81489,
+      "confusion_matrix": {
+        "true_negative": 82430,
+        "false_positive": 50268,
+        "false_negative": 8433,
+        "true_positive": 31221
+      },
+      "top_10_percent": {
+        "fraction": 0.1,
+        "customers": 17236,
+        "captured_churners": 9959,
+        "precision": 0.5778022743095846,
+        "recall": 0.25114742522822414,
+        "lift": 2.511357683507478
+      },
+      "top_20_percent": {
+        "fraction": 0.2,
+        "customers": 34471,
+        "captured_churners": 17141,
+        "precision": 0.4972585651707232,
+        "recall": 0.43226408432944974,
+        "lift": 2.161282801843559
+      }
+    }
+  },
+  "behavioral_plus_channel": {
+    "model_name": "behavioral_plus_channel",
+    "include_channel": true,
+    "selected_class_weight": "none",
+    "feature_columns": [
+      "days_since_last_order",
+      "days_since_first_order",
+      "total_orders",
+      "orders_last_30d",
+      "orders_last_90d",
+      "avg_days_between_orders",
+      "lifetime_spend",
+      "avg_order_value",
+      "spend_last_90d",
+      "spend_trend",
+      "category_count",
+      "historical_item_count",
+      "discount_order_rate",
+      "return_count",
+      "return_order_rate",
+      "return_item_rate",
+      "review_count",
+      "avg_rating_given",
+      "late_delivery_count",
+      "avg_delivery_delay",
+      "customer_tenure_days",
+      "is_single_order_customer",
+      "has_return",
+      "has_review",
+      "has_completed_delivery",
+      "signup_channel"
+    ],
+    "selected_threshold": 0.29,
+    "candidate_results": [
+      {
+        "class_weight": "none",
+        "validation_pr_auc": 0.50165934677243,
+        "validation_roc_auc": 0.74006148898114,
+        "validation_top_20_recall": 0.3850948509485095
+      },
+      {
+        "class_weight": "balanced",
+        "validation_pr_auc": 0.5007431464366504,
+        "validation_roc_auc": 0.7399347091169354,
+        "validation_top_20_recall": 0.3837891106183789
+      }
+    ],
+    "validation": {
+      "rows": 148272,
+      "churners": 40590,
+      "churn_rate": 0.27375364195532537,
+      "roc_auc": 0.74006148898114,
+      "pr_auc": 0.50165934677243,
+      "brier_score": 0.17281790000071984,
+      "threshold": 0.29,
+      "precision": 0.4086272339079551,
+      "recall": 0.7638580931263859,
+      "f1": 0.5324300654268198,
+      "predicted_positive_rate": 0.511735189381677,
+      "predicted_positive_customers": 75876,
+      "confusion_matrix": {
+        "true_negative": 62811,
+        "false_positive": 44871,
+        "false_negative": 9585,
+        "true_positive": 31005
+      },
+      "top_10_percent": {
+        "fraction": 0.1,
+        "customers": 14828,
+        "captured_churners": 8959,
+        "precision": 0.6041947666576747,
+        "recall": 0.22071938901207194,
+        "lift": 2.207074807634066
+      },
+      "top_20_percent": {
+        "fraction": 0.2,
+        "customers": 29655,
+        "captured_churners": 15631,
+        "precision": 0.527094924970494,
+        "recall": 0.3850948509485095,
+        "lift": 1.925435297246245
+      }
+    },
+    "test": {
+      "rows": 172352,
+      "churners": 39654,
+      "churn_rate": 0.23007565911622727,
+      "roc_auc": 0.77650287722222,
+      "pr_auc": 0.4878274577024017,
+      "brier_score": 0.15556225138572982,
+      "threshold": 0.29,
+      "precision": 0.37680325172689255,
+      "recall": 0.8088717405558077,
+      "f1": 0.5141130648030903,
+      "predicted_positive_rate": 0.49389621240252507,
+      "predicted_positive_customers": 85124,
+      "confusion_matrix": {
+        "true_negative": 79649,
+        "false_positive": 53049,
+        "false_negative": 7579,
+        "true_positive": 32075
+      },
+      "top_10_percent": {
+        "fraction": 0.1,
+        "customers": 17236,
+        "captured_churners": 9976,
+        "precision": 0.5787885820375958,
+        "recall": 0.25157613355525293,
+        "lift": 2.5156445677950194
+      },
+      "top_20_percent": {
+        "fraction": 0.2,
+        "customers": 34471,
+        "captured_churners": 17182,
+        "precision": 0.4984479707580285,
+        "recall": 0.43329802794169564,
+        "lift": 2.16645242992101
+      }
+    }
+  },
+  "channel_incremental_value": {
+    "validation_pr_auc_delta": 0.0012939678729865234,
+    "test_pr_auc_delta": 0.0013130904175336355,
+    "test_roc_auc_delta": 0.0007643517745778983,
+    "test_top_10_lift_delta": 0.004286884287541426
+  },
+  "validation_winner": "behavioral_plus_channel",
+  "production_model": "behavioral_only",
+  "production_threshold": 0.3,
+  "production_selection_rule": "Select the signup-channel model only when its validation PR-AUC improves by at least 0.005; otherwise select behavioral-only. The out-of-time test set is used only for final reporting.",
+  "production_validation_pr_auc_delta": 0.0012939678729865234
+}
