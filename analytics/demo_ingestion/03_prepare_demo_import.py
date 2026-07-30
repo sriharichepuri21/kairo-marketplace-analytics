@@ -293,7 +293,7 @@ def main() -> None:
             customer_id AS source_customer_id,
             'demo+'
                 || replace(customer_id, '-', '')
-                || '@demo.kairo.local'
+                || '@example.com'
                 AS email,
             trim(
                 coalesce(first_name, '')
