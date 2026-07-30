@@ -175,6 +175,7 @@ function formatDate(
     "en-IN",
     {
       dateStyle: "medium",
+      timeZone: "UTC",
     },
   ).format(
     new Date(`${value}T00:00:00Z`),
