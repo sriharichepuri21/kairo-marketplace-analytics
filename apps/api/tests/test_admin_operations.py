@@ -720,3 +720,332 @@ def test_operations_days_validation(
     )
 
     assert response.status_code == 422
+
+
+def test_category_performance_requires_authentication(
+    operations_context: OperationsContext,
+) -> None:
+    response = client.get(
+        "/api/v1/admin/operations/categories"
+    )
+
+    assert response.status_code == 401
+
+
+def test_inventory_alerts_require_authentication(
+    operations_context: OperationsContext,
+) -> None:
+    response = client.get(
+        "/api/v1/admin/operations/inventory-alerts"
+    )
+
+    assert response.status_code == 401
+
+
+@pytest.mark.parametrize(
+    "endpoint",
+    [
+        (
+            "/api/v1/admin/operations/"
+            "categories?days=90"
+        ),
+        (
+            "/api/v1/admin/operations/"
+            "inventory-alerts"
+            "?threshold=10"
+        ),
+    ],
+)
+def test_customer_cannot_access_catalog_analytics(
+    operations_context: OperationsContext,
+    endpoint: str,
+) -> None:
+    response = client.get(
+        endpoint,
+        headers=(
+            operations_context[
+                "customer"
+            ]["headers"]
+        ),
+    )
+
+    assert response.status_code == 403
+
+
+def test_admin_can_get_category_performance(
+    operations_context: OperationsContext,
+) -> None:
+    response = client.get(
+        (
+            "/api/v1/admin/operations/"
+            "categories?days=90"
+        ),
+        headers=(
+            operations_context[
+                "admin"
+            ]["headers"]
+        ),
+    )
+
+    assert response.status_code == 200
+
+    payload = response.json()
+
+    assert payload["days"] == 90
+    assert payload["start_date"] is not None
+    assert payload["end_date"] is not None
+    assert payload["items"]
+
+    category_ids: set[str] = set()
+
+    revenue_shares: dict[
+        str,
+        list[float],
+    ] = {}
+
+    for item in payload["items"]:
+        category_id = item["category_id"]
+
+        assert category_id not in category_ids
+        category_ids.add(category_id)
+
+        assert item["category_name"]
+        assert item["products_sold"] > 0
+        assert item["eligible_orders"] > 0
+        assert item["units_sold"] > 0
+        assert item["revenue_by_currency"]
+
+        for currency in item[
+            "revenue_by_currency"
+        ]:
+            assert len(
+                currency["currency_code"]
+            ) == 3
+
+            assert currency["units_sold"] > 0
+
+            assert (
+                money(
+                    currency["gross_sales"]
+                )
+                >= Decimal("0.00")
+            )
+
+            assert (
+                money(
+                    currency[
+                        "average_unit_revenue"
+                    ]
+                )
+                >= Decimal("0.00")
+            )
+
+            share = float(
+                currency["revenue_share"]
+            )
+
+            assert 0 <= share <= 1
+
+            revenue_shares.setdefault(
+                currency["currency_code"],
+                [],
+            ).append(share)
+
+    for shares in revenue_shares.values():
+        assert sum(shares) == pytest.approx(
+            1.0,
+            abs=0.001,
+        )
+
+
+def test_admin_can_get_inventory_alerts(
+    operations_context: OperationsContext,
+) -> None:
+    response = client.get(
+        (
+            "/api/v1/admin/operations/"
+            "inventory-alerts"
+            "?threshold=10"
+            "&page=1"
+            "&page_size=10"
+        ),
+        headers=(
+            operations_context[
+                "admin"
+            ]["headers"]
+        ),
+    )
+
+    assert response.status_code == 200
+
+    payload = response.json()
+
+    assert payload[
+        "low_stock_threshold"
+    ] == 10
+
+    assert (
+        payload["tracked_products"]
+        + payload["untracked_products"]
+        == payload["total_products"]
+    )
+
+    assert (
+        payload["out_of_stock_products"]
+        + payload["critical_stock_products"]
+        + payload["low_stock_products"]
+        + payload["healthy_stock_products"]
+        == payload["tracked_products"]
+    )
+
+    assert (
+        payload["untracked_products"]
+        + payload["out_of_stock_products"]
+        + payload["critical_stock_products"]
+        + payload["low_stock_products"]
+        == payload["total_items"]
+    )
+
+    assert payload["page"] == 1
+    assert payload["page_size"] == 10
+    assert len(payload["items"]) <= 10
+
+    if payload["total_items"] > 0:
+        assert payload["total_pages"] > 0
+
+    allowed_statuses = {
+        "untracked",
+        "out_of_stock",
+        "critical_stock",
+        "low_stock",
+    }
+
+    for item in payload["items"]:
+        status = item["inventory_status"]
+        available = item[
+            "available_quantity"
+        ]
+
+        assert status in allowed_statuses
+        assert item["product_id"]
+        assert item["product_name"]
+        assert item["brand"]
+        assert item["category_name"]
+
+        if status == "untracked":
+            assert available is None
+
+        elif status == "out_of_stock":
+            assert available == 0
+
+        elif status == "critical_stock":
+            assert available is not None
+            assert 1 <= available <= 5
+
+        elif status == "low_stock":
+            assert available is not None
+            assert 6 <= available <= 10
+
+
+def test_inventory_alert_pagination(
+    operations_context: OperationsContext,
+) -> None:
+    headers = operations_context[
+        "admin"
+    ]["headers"]
+
+    first_response = client.get(
+        (
+            "/api/v1/admin/operations/"
+            "inventory-alerts"
+            "?threshold=10"
+            "&page=1"
+            "&page_size=5"
+        ),
+        headers=headers,
+    )
+
+    second_response = client.get(
+        (
+            "/api/v1/admin/operations/"
+            "inventory-alerts"
+            "?threshold=10"
+            "&page=2"
+            "&page_size=5"
+        ),
+        headers=headers,
+    )
+
+    assert first_response.status_code == 200
+    assert second_response.status_code == 200
+
+    first_payload = first_response.json()
+    second_payload = second_response.json()
+
+    first_ids = {
+        item["product_id"]
+        for item in first_payload["items"]
+    }
+
+    second_ids = {
+        item["product_id"]
+        for item in second_payload["items"]
+    }
+
+    assert first_ids
+    assert second_ids
+    assert first_ids.isdisjoint(second_ids)
+
+    assert (
+        first_payload["total_items"]
+        == second_payload["total_items"]
+    )
+
+
+@pytest.mark.parametrize(
+    "endpoint",
+    [
+        (
+            "/api/v1/admin/operations/"
+            "categories?days=0"
+        ),
+        (
+            "/api/v1/admin/operations/"
+            "categories?days=3651"
+        ),
+        (
+            "/api/v1/admin/operations/"
+            "inventory-alerts?threshold=4"
+        ),
+        (
+            "/api/v1/admin/operations/"
+            "inventory-alerts?threshold=101"
+        ),
+        (
+            "/api/v1/admin/operations/"
+            "inventory-alerts?page=0"
+        ),
+        (
+            "/api/v1/admin/operations/"
+            "inventory-alerts?page_size=0"
+        ),
+        (
+            "/api/v1/admin/operations/"
+            "inventory-alerts?page_size=101"
+        ),
+    ],
+)
+def test_catalog_analytics_query_validation(
+    operations_context: OperationsContext,
+    endpoint: str,
+) -> None:
+    response = client.get(
+        endpoint,
+        headers=(
+            operations_context[
+                "admin"
+            ]["headers"]
+        ),
+    )
+
+    assert response.status_code == 422

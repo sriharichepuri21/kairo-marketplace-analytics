@@ -2,6 +2,7 @@ from decimal import (
     ROUND_HALF_UP,
     Decimal,
 )
+from math import ceil
 
 from sqlalchemy.orm import Session
 
@@ -9,7 +10,12 @@ from app.repositories.operations_repository import (
     OperationsRepository,
 )
 from app.schemas.admin_operations import (
+    OperationsCategoryCurrencySummary,
+    OperationsCategoryPerformanceItem,
+    OperationsCategoryPerformanceResponse,
     OperationsCurrencySummary,
+    OperationsInventoryAlertItem,
+    OperationsInventoryAlertsResponse,
     OperationsOrderStatusItem,
     OperationsOrderStatusResponse,
     OperationsRevenueTrendPoint,
@@ -207,4 +213,251 @@ class OperationsService:
                 )
                 for row in rows
             ],
+        )
+
+    @staticmethod
+    def get_category_performance(
+        database: Session,
+        *,
+        days: int,
+    ) -> OperationsCategoryPerformanceResponse:
+        (
+            start_date,
+            end_date,
+            category_rows,
+            currency_rows,
+        ) = (
+            OperationsRepository
+            .get_category_performance(
+                database,
+                days=days,
+            )
+        )
+
+        revenue_totals: dict[
+            str,
+            Decimal,
+        ] = {}
+
+        category_revenue: dict[
+            object,
+            list[object],
+        ] = {}
+
+        for row in currency_rows:
+            currency_code = str(
+                row.currency_code
+            )
+
+            gross_sales = decimal_value(
+                row.gross_sales
+            )
+
+            revenue_totals[
+                currency_code
+            ] = (
+                revenue_totals.get(
+                    currency_code,
+                    Decimal("0.00"),
+                )
+                + gross_sales
+            )
+
+            category_revenue.setdefault(
+                row.category_id,
+                [],
+            ).append(row)
+
+        items = []
+
+        for row in category_rows:
+            revenue_items = []
+
+            for currency_row in (
+                category_revenue.get(
+                    row.category_id,
+                    [],
+                )
+            ):
+                currency_code = str(
+                    currency_row.currency_code
+                )
+
+                gross_sales = decimal_value(
+                    currency_row.gross_sales
+                )
+
+                units_sold = int(
+                    currency_row.units_sold
+                    or 0
+                )
+
+                currency_total = (
+                    revenue_totals.get(
+                        currency_code,
+                        Decimal("0.00"),
+                    )
+                )
+
+                revenue_share = (
+                    float(
+                        gross_sales
+                        / currency_total
+                    )
+                    if currency_total
+                    else 0
+                )
+
+                average_unit_revenue = (
+                    gross_sales
+                    / Decimal(units_sold)
+                    if units_sold
+                    else Decimal("0.00")
+                )
+
+                revenue_items.append(
+                    OperationsCategoryCurrencySummary(
+                        currency_code=(
+                            currency_code
+                        ),
+                        units_sold=units_sold,
+                        gross_sales=gross_sales,
+                        average_unit_revenue=(
+                            decimal_value(
+                                average_unit_revenue
+                            )
+                        ),
+                        revenue_share=round(
+                            revenue_share,
+                            4,
+                        ),
+                    )
+                )
+
+            items.append(
+                OperationsCategoryPerformanceItem(
+                    category_id=(
+                        row.category_id
+                    ),
+                    category_name=(
+                        row.category_name
+                    ),
+                    products_sold=int(
+                        row.products_sold or 0
+                    ),
+                    eligible_orders=int(
+                        row.eligible_orders or 0
+                    ),
+                    units_sold=int(
+                        row.units_sold or 0
+                    ),
+                    revenue_by_currency=(
+                        revenue_items
+                    ),
+                )
+            )
+
+        return (
+            OperationsCategoryPerformanceResponse(
+                days=days,
+                start_date=start_date,
+                end_date=end_date,
+                items=items,
+            )
+        )
+
+    @staticmethod
+    def get_inventory_alerts(
+        database: Session,
+        *,
+        threshold: int,
+        page: int,
+        page_size: int,
+    ) -> OperationsInventoryAlertsResponse:
+        (
+            summary,
+            rows,
+            total_items,
+        ) = (
+            OperationsRepository
+            .get_inventory_alerts(
+                database,
+                threshold=threshold,
+                page=page,
+                page_size=page_size,
+            )
+        )
+
+        items = []
+
+        for row in rows:
+            available = (
+                row.available_quantity
+            )
+
+            if available is None:
+                status = "untracked"
+            elif available == 0:
+                status = "out_of_stock"
+            elif available <= 5:
+                status = "critical_stock"
+            else:
+                status = "low_stock"
+
+            items.append(
+                OperationsInventoryAlertItem(
+                    product_id=row.product_id,
+                    product_name=(
+                        row.product_name
+                    ),
+                    sku=row.sku,
+                    brand=row.brand,
+                    category_name=(
+                        row.category_name
+                    ),
+                    available_quantity=(
+                        available
+                    ),
+                    reserved_quantity=(
+                        row.reserved_quantity
+                    ),
+                    inventory_status=status,
+                )
+            )
+
+        return OperationsInventoryAlertsResponse(
+            low_stock_threshold=threshold,
+            total_products=int(
+                summary.total_products or 0
+            ),
+            tracked_products=int(
+                summary.tracked_products or 0
+            ),
+            untracked_products=int(
+                summary.untracked_products or 0
+            ),
+            out_of_stock_products=int(
+                summary.out_of_stock_products
+                or 0
+            ),
+            critical_stock_products=int(
+                summary.critical_stock_products
+                or 0
+            ),
+            low_stock_products=int(
+                summary.low_stock_products or 0
+            ),
+            healthy_stock_products=int(
+                summary.healthy_stock_products
+                or 0
+            ),
+            page=page,
+            page_size=page_size,
+            total_items=total_items,
+            total_pages=(
+                ceil(total_items / page_size)
+                if total_items
+                else 0
+            ),
+            items=items,
         )
