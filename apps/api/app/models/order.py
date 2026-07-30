@@ -4,6 +4,7 @@ from decimal import Decimal
 from typing import TYPE_CHECKING
 
 from sqlalchemy import (
+    Boolean,
     CheckConstraint,
     DateTime,
     ForeignKey,
@@ -13,6 +14,7 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
     Uuid,
+    false,
     func,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -48,6 +50,10 @@ class Order(Base):
             name="subtotal_nonnegative",
         ),
         CheckConstraint(
+            "discount_amount >= 0",
+            name="discount_amount_nonnegative",
+        ),
+        CheckConstraint(
             "shipping_amount >= 0",
             name="shipping_amount_nonnegative",
         ),
@@ -60,7 +66,7 @@ class Order(Base):
             name="total_amount_nonnegative",
         ),
         CheckConstraint(
-            ("total_amount = subtotal + shipping_amount + tax_amount"),
+            ("total_amount = subtotal - discount_amount + shipping_amount + tax_amount"),
             name="total_matches_components",
         ),
         CheckConstraint(
@@ -77,6 +83,13 @@ class Order(Base):
         Uuid(as_uuid=True),
         primary_key=True,
         default=uuid.uuid4,
+    )
+
+    source_order_id: Mapped[str | None] = mapped_column(
+        String(80),
+        nullable=True,
+        unique=True,
+        index=True,
     )
 
     order_number: Mapped[str] = mapped_column(
@@ -105,6 +118,21 @@ class Order(Base):
         nullable=True,
     )
 
+    source_region: Mapped[str | None] = mapped_column(
+        String(30),
+        nullable=True,
+    )
+
+    order_channel: Mapped[str | None] = mapped_column(
+        String(40),
+        nullable=True,
+    )
+
+    device_type: Mapped[str | None] = mapped_column(
+        String(40),
+        nullable=True,
+    )
+
     status: Mapped[str] = mapped_column(
         String(30),
         nullable=False,
@@ -130,6 +158,13 @@ class Order(Base):
     subtotal: Mapped[Decimal] = mapped_column(
         Numeric(12, 2),
         nullable=False,
+    )
+
+    discount_amount: Mapped[Decimal] = mapped_column(
+        Numeric(12, 2),
+        nullable=False,
+        default=Decimal("0.00"),
+        server_default="0",
     )
 
     shipping_amount: Mapped[Decimal] = mapped_column(
@@ -196,6 +231,13 @@ class Order(Base):
         nullable=True,
     )
 
+    is_demo: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False,
+        server_default=false(),
+    )
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
@@ -244,7 +286,15 @@ class OrderItem(Base):
             name="line_total_nonnegative",
         ),
         CheckConstraint(
-            "line_total = unit_price * quantity",
+            "discount_amount >= 0",
+            name="discount_amount_nonnegative",
+        ),
+        CheckConstraint(
+            "tax_amount >= 0",
+            name="tax_amount_nonnegative",
+        ),
+        CheckConstraint(
+            ("line_total = unit_price * quantity - discount_amount + tax_amount"),
             name="line_total_matches_quantity",
         ),
     )
@@ -253,6 +303,24 @@ class OrderItem(Base):
         Uuid(as_uuid=True),
         primary_key=True,
         default=uuid.uuid4,
+    )
+
+    source_order_item_id: Mapped[str | None] = mapped_column(
+        String(80),
+        nullable=True,
+        unique=True,
+        index=True,
+    )
+
+    source_seller_id: Mapped[str | None] = mapped_column(
+        String(80),
+        nullable=True,
+        index=True,
+    )
+
+    source_category: Mapped[str | None] = mapped_column(
+        String(160),
+        nullable=True,
     )
 
     order_id: Mapped[uuid.UUID] = mapped_column(
@@ -298,6 +366,25 @@ class OrderItem(Base):
     unit_price: Mapped[Decimal] = mapped_column(
         Numeric(12, 2),
         nullable=False,
+    )
+
+    unit_cost: Mapped[Decimal | None] = mapped_column(
+        Numeric(12, 2),
+        nullable=True,
+    )
+
+    discount_amount: Mapped[Decimal] = mapped_column(
+        Numeric(12, 2),
+        nullable=False,
+        default=Decimal("0.00"),
+        server_default="0",
+    )
+
+    tax_amount: Mapped[Decimal] = mapped_column(
+        Numeric(12, 2),
+        nullable=False,
+        default=Decimal("0.00"),
+        server_default="0",
     )
 
     line_total: Mapped[Decimal] = mapped_column(

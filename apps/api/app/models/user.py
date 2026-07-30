@@ -7,6 +7,7 @@ from sqlalchemy import (
     DateTime,
     String,
     Uuid,
+    false,
     func,
     true,
 )
@@ -28,6 +29,45 @@ class User(Base):
         Uuid(as_uuid=True),
         primary_key=True,
         default=uuid.uuid4,
+    )
+
+    source_customer_id: Mapped[str | None] = mapped_column(
+        String(80),
+        nullable=True,
+        unique=True,
+        index=True,
+    )
+
+    region: Mapped[str | None] = mapped_column(
+        String(30),
+        nullable=True,
+    )
+
+    country_code: Mapped[str | None] = mapped_column(
+        String(2),
+        nullable=True,
+    )
+
+    segment: Mapped[str | None] = mapped_column(
+        String(50),
+        nullable=True,
+    )
+
+    signup_channel: Mapped[str | None] = mapped_column(
+        String(50),
+        nullable=True,
+    )
+
+    account_status: Mapped[str | None] = mapped_column(
+        String(30),
+        nullable=True,
+    )
+
+    is_demo: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False,
+        server_default=false(),
     )
 
     email: Mapped[str] = mapped_column(
