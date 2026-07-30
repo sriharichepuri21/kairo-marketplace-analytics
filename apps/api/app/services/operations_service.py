@@ -1,4 +1,7 @@
-from decimal import ROUND_HALF_UP, Decimal
+from decimal import (
+    ROUND_HALF_UP,
+    Decimal,
+)
 
 from sqlalchemy.orm import Session
 
@@ -7,6 +10,10 @@ from app.repositories.operations_repository import (
 )
 from app.schemas.admin_operations import (
     OperationsCurrencySummary,
+    OperationsOrderStatusItem,
+    OperationsOrderStatusResponse,
+    OperationsRevenueTrendPoint,
+    OperationsRevenueTrendResponse,
     OperationsSummaryResponse,
 )
 
@@ -25,6 +32,18 @@ def decimal_value(
         MONEY_PRECISION,
         rounding=ROUND_HALF_UP,
     )
+
+
+def string_value(
+    value: object,
+) -> str:
+    enum_value = getattr(
+        value,
+        "value",
+        value,
+    )
+
+    return str(enum_value)
 
 
 class OperationsService:
@@ -73,5 +92,96 @@ class OperationsService:
                     ),
                 )
                 for row in currency_rows
+            ],
+        )
+
+    @staticmethod
+    def get_revenue_trend(
+        database: Session,
+        *,
+        days: int,
+    ) -> OperationsRevenueTrendResponse:
+        (
+            start_date,
+            end_date,
+            rows,
+        ) = OperationsRepository.get_revenue_trend(
+            database,
+            days=days,
+        )
+
+        return OperationsRevenueTrendResponse(
+            days=days,
+            start_date=start_date,
+            end_date=end_date,
+            items=[
+                OperationsRevenueTrendPoint(
+                    order_date=row.order_date,
+                    currency_code=(
+                        row.currency_code
+                    ),
+                    eligible_orders=int(
+                        row.eligible_orders or 0
+                    ),
+                    gross_sales=decimal_value(
+                        row.gross_sales
+                    ),
+                    average_order_value=(
+                        decimal_value(
+                            row.average_order_value
+                        )
+                    ),
+                )
+                for row in rows
+            ],
+        )
+
+    @staticmethod
+    def get_order_statuses(
+        database: Session,
+        *,
+        days: int,
+    ) -> OperationsOrderStatusResponse:
+        (
+            start_date,
+            end_date,
+            rows,
+        ) = OperationsRepository.get_order_statuses(
+            database,
+            days=days,
+        )
+
+        total_orders = sum(
+            int(row.order_count or 0)
+            for row in rows
+        )
+
+        return OperationsOrderStatusResponse(
+            days=days,
+            start_date=start_date,
+            end_date=end_date,
+            total_orders=total_orders,
+            items=[
+                OperationsOrderStatusItem(
+                    status=string_value(
+                        row.status
+                    ),
+                    order_count=int(
+                        row.order_count or 0
+                    ),
+                    order_percentage=(
+                        round(
+                            int(
+                                row.order_count
+                                or 0
+                            )
+                            / total_orders,
+                            4,
+                        )
+                        if total_orders
+                        else 0
+                    ),
+                )
+                for row in rows
             ],
         )

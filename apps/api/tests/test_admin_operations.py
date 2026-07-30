@@ -499,3 +499,215 @@ def test_currency_average_order_values_reconcile(
             )
             == expected_average
         )
+
+
+def test_revenue_trend_requires_authentication(
+    operations_context: OperationsContext,
+) -> None:
+    response = client.get(
+        "/api/v1/admin/operations/revenue-trend"
+    )
+
+    assert response.status_code == 401
+
+
+def test_customer_cannot_access_operations_analytics(
+    operations_context: OperationsContext,
+) -> None:
+    headers = operations_context[
+        "customer"
+    ]["headers"]
+
+    revenue_response = client.get(
+        "/api/v1/admin/operations/revenue-trend",
+        headers=headers,
+    )
+
+    status_response = client.get(
+        "/api/v1/admin/operations/order-statuses",
+        headers=headers,
+    )
+
+    assert revenue_response.status_code == 403
+    assert status_response.status_code == 403
+
+
+def test_admin_can_get_revenue_trend(
+    operations_context: OperationsContext,
+) -> None:
+    headers = operations_context[
+        "admin"
+    ]["headers"]
+
+    response = client.get(
+        (
+            "/api/v1/admin/operations/"
+            "revenue-trend?days=3650"
+        ),
+        headers=headers,
+    )
+
+    summary_response = client.get(
+        "/api/v1/admin/operations/summary",
+        headers=headers,
+    )
+
+    assert response.status_code == 200
+    assert summary_response.status_code == 200
+
+    payload = response.json()
+    summary = summary_response.json()
+
+    assert payload["days"] == 3650
+    assert payload["start_date"] is not None
+    assert payload["end_date"] is not None
+    assert payload["items"]
+
+    trend_by_currency: dict[
+        str,
+        dict[str, Decimal | int],
+    ] = {}
+
+    for item in payload["items"]:
+        currency_code = item[
+            "currency_code"
+        ]
+
+        values = trend_by_currency.setdefault(
+            currency_code,
+            {
+                "eligible_orders": 0,
+                "gross_sales": Decimal(
+                    "0.00"
+                ),
+            },
+        )
+
+        values["eligible_orders"] = (
+            int(values["eligible_orders"])
+            + int(item["eligible_orders"])
+        )
+
+        values["gross_sales"] = (
+            money(values["gross_sales"])
+            + money(item["gross_sales"])
+        )
+
+    for currency in summary[
+        "revenue_by_currency"
+    ]:
+        trend_values = trend_by_currency[
+            currency["currency_code"]
+        ]
+
+        assert (
+            int(
+                trend_values[
+                    "eligible_orders"
+                ]
+            )
+            == currency["eligible_orders"]
+        )
+
+        assert (
+            money(
+                trend_values[
+                    "gross_sales"
+                ]
+            )
+            == money(
+                currency["gross_sales"]
+            )
+        )
+
+
+def test_admin_can_get_order_statuses(
+    operations_context: OperationsContext,
+) -> None:
+    headers = operations_context[
+        "admin"
+    ]["headers"]
+
+    response = client.get(
+        (
+            "/api/v1/admin/operations/"
+            "order-statuses?days=3650"
+        ),
+        headers=headers,
+    )
+
+    summary_response = client.get(
+        "/api/v1/admin/operations/summary",
+        headers=headers,
+    )
+
+    assert response.status_code == 200
+    assert summary_response.status_code == 200
+
+    payload = response.json()
+    summary = summary_response.json()
+
+    assert payload["days"] == 3650
+    assert payload["start_date"] is not None
+    assert payload["end_date"] is not None
+    assert payload["items"]
+
+    counted_orders = sum(
+        item["order_count"]
+        for item in payload["items"]
+    )
+
+    assert counted_orders == payload[
+        "total_orders"
+    ]
+
+    assert payload[
+        "total_orders"
+    ] == summary["total_orders"]
+
+    percentage_total = sum(
+        item["order_percentage"]
+        for item in payload["items"]
+    )
+
+    assert percentage_total == pytest.approx(
+        1.0,
+        abs=0.001,
+    )
+
+
+@pytest.mark.parametrize(
+    "endpoint",
+    [
+        (
+            "/api/v1/admin/operations/"
+            "revenue-trend?days=0"
+        ),
+        (
+            "/api/v1/admin/operations/"
+            "revenue-trend?days=3651"
+        ),
+        (
+            "/api/v1/admin/operations/"
+            "order-statuses?days=0"
+        ),
+        (
+            "/api/v1/admin/operations/"
+            "order-statuses?days=3651"
+        ),
+    ],
+)
+def test_operations_days_validation(
+    operations_context: OperationsContext,
+    endpoint: str,
+) -> None:
+    response = client.get(
+        endpoint,
+        headers=(
+            operations_context[
+                "admin"
+            ]["headers"]
+        ),
+    )
+
+    assert response.status_code == 422
