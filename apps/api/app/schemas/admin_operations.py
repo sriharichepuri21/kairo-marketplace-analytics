@@ -17,6 +17,9 @@ class OperationsCurrencySummary(BaseModel):
 
 
 class OperationsSummaryResponse(BaseModel):
+    days: int
+    start_date: date | None
+    end_date: date | None
     snapshot_date: date | None
 
     total_orders: int

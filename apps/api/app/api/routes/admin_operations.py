@@ -28,6 +28,14 @@ DatabaseSession = Annotated[
     Depends(get_db),
 ]
 
+AnalysisDays = Annotated[
+    int,
+    Query(
+        ge=1,
+        le=3650,
+    ),
+]
+
 
 @router.get(
     "/summary",
@@ -37,9 +45,11 @@ DatabaseSession = Annotated[
 def get_operations_summary(
     _admin_user: AdminUser,
     database: DatabaseSession,
+    days: AnalysisDays = 90,
 ) -> OperationsSummaryResponse:
     return OperationsService.get_summary(
-        database
+        database,
+        days=days,
     )
 
 
@@ -51,13 +61,7 @@ def get_operations_summary(
 def get_operations_revenue_trend(
     _admin_user: AdminUser,
     database: DatabaseSession,
-    days: Annotated[
-        int,
-        Query(
-            ge=1,
-            le=3650,
-        ),
-    ] = 90,
+    days: AnalysisDays = 90,
 ) -> OperationsRevenueTrendResponse:
     return OperationsService.get_revenue_trend(
         database,
@@ -73,13 +77,7 @@ def get_operations_revenue_trend(
 def get_operations_order_statuses(
     _admin_user: AdminUser,
     database: DatabaseSession,
-    days: Annotated[
-        int,
-        Query(
-            ge=1,
-            le=3650,
-        ),
-    ] = 90,
+    days: AnalysisDays = 90,
 ) -> OperationsOrderStatusResponse:
     return OperationsService.get_order_statuses(
         database,

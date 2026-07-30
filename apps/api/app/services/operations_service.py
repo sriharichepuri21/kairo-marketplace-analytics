@@ -50,15 +50,38 @@ class OperationsService:
     @staticmethod
     def get_summary(
         database: Session,
+        *,
+        days: int,
     ) -> OperationsSummaryResponse:
-        summary, currency_rows = (
-            OperationsRepository.get_summary(
-                database
-            )
+        (
+            start_date,
+            end_date,
+            summary,
+            currency_rows,
+        ) = OperationsRepository.get_summary(
+            database,
+            days=days,
         )
 
+        if summary is None:
+            return OperationsSummaryResponse(
+                days=days,
+                start_date=start_date,
+                end_date=end_date,
+                snapshot_date=end_date,
+                total_orders=0,
+                eligible_orders=0,
+                delivered_orders=0,
+                cancelled_orders=0,
+                active_customers=0,
+                revenue_by_currency=[],
+            )
+
         return OperationsSummaryResponse(
-            snapshot_date=summary.snapshot_date,
+            days=days,
+            start_date=start_date,
+            end_date=end_date,
+            snapshot_date=end_date,
             total_orders=int(
                 summary.total_orders or 0
             ),

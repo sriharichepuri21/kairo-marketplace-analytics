@@ -1,4 +1,5 @@
 from collections.abc import Generator
+from datetime import datetime
 from decimal import (
     ROUND_HALF_UP,
     Decimal,
@@ -117,6 +118,7 @@ def create_authenticated_user(
 
 def create_test_order(
     *,
+    created_at: datetime,
     user_id: UUID,
     status: str,
     payment_status: str,
@@ -136,6 +138,7 @@ def create_test_order(
             f"OPS-TEST-{uuid4().hex[:20]}"
         ),
         user_id=user_id,
+        created_at=created_at,
         status=status,
         payment_status=payment_status,
         currency_code=currency_code,
@@ -231,13 +234,16 @@ def operations_context() -> Generator[
 
     try:
         baseline = (
-            OperationsService.get_summary(
-                database
-            ).model_dump()
+            OperationsService.get_summary(database, days=3650).model_dump()
+        )
+
+        analysis_created_at = datetime.fromisoformat(
+            f"{baseline['end_date']}T12:00:00+00:00"
         )
 
         orders = [
             create_test_order(
+                created_at=analysis_created_at,
                 user_id=(
                     order_customer["user_id"]
                 ),
@@ -251,6 +257,7 @@ def operations_context() -> Generator[
                 tax_amount=Decimal("5.00"),
             ),
             create_test_order(
+                created_at=analysis_created_at,
                 user_id=(
                     order_customer["user_id"]
                 ),
@@ -264,6 +271,7 @@ def operations_context() -> Generator[
                 tax_amount=Decimal("5.00"),
             ),
             create_test_order(
+                created_at=analysis_created_at,
                 user_id=(
                     order_customer["user_id"]
                 ),
@@ -277,6 +285,7 @@ def operations_context() -> Generator[
                 tax_amount=Decimal("5.00"),
             ),
             create_test_order(
+                created_at=analysis_created_at,
                 user_id=(
                     order_customer["user_id"]
                 ),
@@ -325,7 +334,7 @@ def test_operations_summary_requires_authentication(
     operations_context: OperationsContext,
 ) -> None:
     response = client.get(
-        "/api/v1/admin/operations/summary"
+        "/api/v1/admin/operations/summary?days=3650"
     )
 
     assert response.status_code == 401
@@ -335,7 +344,7 @@ def test_customer_cannot_access_operations_summary(
     operations_context: OperationsContext,
 ) -> None:
     response = client.get(
-        "/api/v1/admin/operations/summary",
+        "/api/v1/admin/operations/summary?days=3650",
         headers=(
             operations_context[
                 "customer"
@@ -350,7 +359,7 @@ def test_admin_can_get_operations_summary(
     operations_context: OperationsContext,
 ) -> None:
     response = client.get(
-        "/api/v1/admin/operations/summary",
+        "/api/v1/admin/operations/summary?days=3650",
         headers=(
             operations_context[
                 "admin"
@@ -397,7 +406,7 @@ def test_cancelled_and_unpaid_orders_are_excluded(
     operations_context: OperationsContext,
 ) -> None:
     response = client.get(
-        "/api/v1/admin/operations/summary",
+        "/api/v1/admin/operations/summary?days=3650",
         headers=(
             operations_context[
                 "admin"
@@ -464,7 +473,7 @@ def test_currency_average_order_values_reconcile(
     operations_context: OperationsContext,
 ) -> None:
     response = client.get(
-        "/api/v1/admin/operations/summary",
+        "/api/v1/admin/operations/summary?days=3650",
         headers=(
             operations_context[
                 "admin"
@@ -548,7 +557,7 @@ def test_admin_can_get_revenue_trend(
     )
 
     summary_response = client.get(
-        "/api/v1/admin/operations/summary",
+        "/api/v1/admin/operations/summary?days=3650",
         headers=headers,
     )
 
@@ -637,7 +646,7 @@ def test_admin_can_get_order_statuses(
     )
 
     summary_response = client.get(
-        "/api/v1/admin/operations/summary",
+        "/api/v1/admin/operations/summary?days=3650",
         headers=headers,
     )
 
