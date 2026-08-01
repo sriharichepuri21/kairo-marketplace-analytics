@@ -160,4 +160,3 @@ def get_operations_conversion_funnel(
             days=days,
         )
     )
-

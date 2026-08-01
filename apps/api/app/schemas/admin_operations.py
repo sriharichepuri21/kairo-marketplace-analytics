@@ -184,4 +184,3 @@ class OperationsConversionFunnelResponse(
         ge=0,
         le=1,
     )
-

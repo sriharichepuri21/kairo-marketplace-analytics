@@ -1054,10 +1054,10 @@ def test_conversion_funnel_requires_authentication(
     operations_context: OperationsContext,
 ) -> None:
     response = client.get(
-        
+
             "/api/v1/admin/operations/"
             "conversion-funnel?days=90"
-        
+
     )
 
     assert response.status_code == 401
@@ -1234,4 +1234,3 @@ def test_conversion_funnel_days_validation(
     )
 
     assert response.status_code == 422
-
