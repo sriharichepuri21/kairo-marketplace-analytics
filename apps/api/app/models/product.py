@@ -1,17 +1,20 @@
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 from typing import TYPE_CHECKING
 
 from sqlalchemy import (
     Boolean,
     CheckConstraint,
+    Date,
     DateTime,
     ForeignKey,
+    Integer,
     Numeric,
     String,
     Text,
     Uuid,
+    false,
     func,
     true,
 )
@@ -29,6 +32,18 @@ class Product(Base):
     __tablename__ = "products"
     __table_args__ = (
         CheckConstraint("price >= 0", name="price_nonnegative"),
+        CheckConstraint(
+            "cost IS NULL OR cost >= 0",
+            name="cost_nonnegative",
+        ),
+        CheckConstraint(
+            "review_count >= 0",
+            name="review_count_nonnegative",
+        ),
+        CheckConstraint(
+            ("return_rate IS NULL OR (return_rate >= 0 AND return_rate <= 1)"),
+            name="return_rate_valid",
+        ),
         CheckConstraint(
             "discount_price IS NULL OR discount_price >= 0",
             name="discount_price_nonnegative",
@@ -48,6 +63,32 @@ class Product(Base):
         primary_key=True,
         default=uuid.uuid4,
     )
+
+    source_product_id: Mapped[str | None] = mapped_column(
+        String(80),
+        nullable=True,
+        unique=True,
+        index=True,
+    )
+
+    sku: Mapped[str | None] = mapped_column(
+        String(100),
+        nullable=True,
+        unique=True,
+        index=True,
+    )
+
+    seller_source_id: Mapped[str | None] = mapped_column(
+        String(80),
+        nullable=True,
+        index=True,
+    )
+
+    subcategory: Mapped[str | None] = mapped_column(
+        String(160),
+        nullable=True,
+    )
+
     category_id: Mapped[uuid.UUID] = mapped_column(
         Uuid(as_uuid=True),
         ForeignKey("categories.id", ondelete="RESTRICT"),
@@ -67,6 +108,34 @@ class Product(Base):
         Numeric(12, 2),
         nullable=False,
     )
+
+    cost: Mapped[Decimal | None] = mapped_column(
+        Numeric(12, 2),
+        nullable=True,
+    )
+
+    weight_kg: Mapped[Decimal | None] = mapped_column(
+        Numeric(10, 3),
+        nullable=True,
+    )
+
+    review_count: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=0,
+        server_default="0",
+    )
+
+    return_rate: Mapped[Decimal | None] = mapped_column(
+        Numeric(8, 6),
+        nullable=True,
+    )
+
+    launch_date: Mapped[date | None] = mapped_column(
+        Date,
+        nullable=True,
+    )
+
     discount_price: Mapped[Decimal | None] = mapped_column(
         Numeric(12, 2),
         nullable=True,
@@ -84,6 +153,14 @@ class Product(Base):
         server_default=true(),
         index=True,
     )
+
+    is_demo: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False,
+        server_default=false(),
+    )
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,

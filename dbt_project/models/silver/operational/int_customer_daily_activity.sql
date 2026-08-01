@@ -25,9 +25,10 @@ select
     actor_id,
     actor_type,
     user_id,
-    session_id,
+    min(session_id) as session_id,
     event_date,
 
+    count(distinct session_id) as session_count,
     count(*) as total_events,
 
     sum(
@@ -128,5 +129,4 @@ group by
     actor_id,
     actor_type,
     user_id,
-    session_id,
     event_date
