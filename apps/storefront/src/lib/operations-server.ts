@@ -7,6 +7,8 @@ import {
   readApiError,
 } from "@/lib/auth-server";
 import type {
+  OperationsCategoryPerformance,
+  OperationsInventoryAlerts,
   OperationsOrderStatuses,
   OperationsRevenueTrend,
   OperationsSummary,
@@ -122,5 +124,67 @@ export async function getOperationsOrderStatuses(
 
   return response.json() as Promise<
     OperationsOrderStatuses
+  >;
+}
+
+
+export async function getOperationsCategoryPerformance(
+  days: number,
+): Promise<OperationsCategoryPerformance | null> {
+  const response =
+    await requireSuccessfulResponse(
+      await requestAuthenticatedApi(
+        (
+          "/api/v1/admin/operations/"
+          + `categories?days=${days}`
+        ),
+      ),
+      "Unable to load category performance.",
+    );
+
+  if (response === null) {
+    return null;
+  }
+
+  return response.json() as Promise<
+    OperationsCategoryPerformance
+  >;
+}
+
+
+export async function getOperationsInventoryAlerts(
+  {
+    threshold = 10,
+    page = 1,
+    pageSize = 10,
+  }: {
+    threshold?: number;
+    page?: number;
+    pageSize?: number;
+  } = {},
+): Promise<OperationsInventoryAlerts | null> {
+  const query = new URLSearchParams({
+    threshold: String(threshold),
+    page: String(page),
+    page_size: String(pageSize),
+  });
+
+  const response =
+    await requireSuccessfulResponse(
+      await requestAuthenticatedApi(
+        (
+          "/api/v1/admin/operations/"
+          + `inventory-alerts?${query.toString()}`
+        ),
+      ),
+      "Unable to load inventory alerts.",
+    );
+
+  if (response === null) {
+    return null;
+  }
+
+  return response.json() as Promise<
+    OperationsInventoryAlerts
   >;
 }

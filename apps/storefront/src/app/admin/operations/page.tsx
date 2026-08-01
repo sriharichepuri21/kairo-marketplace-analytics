@@ -5,11 +5,16 @@ import {
   getCurrentUser,
 } from "@/lib/auth-server";
 import {
+  getOperationsCategoryPerformance,
+  getOperationsInventoryAlerts,
   getOperationsOrderStatuses,
   getOperationsRevenueTrend,
   getOperationsSummary,
 } from "@/lib/operations-server";
 import type {
+  OperationsCategoryPerformance,
+  OperationsInventoryAlerts,
+  OperationsInventoryStatus,
   OperationsOrderStatuses,
   OperationsRevenueTrend,
   OperationsRevenueTrendPoint,
@@ -35,6 +40,10 @@ interface DashboardData {
   summary: OperationsSummary;
   revenueTrend: OperationsRevenueTrend;
   orderStatuses: OperationsOrderStatuses;
+  categoryPerformance:
+    OperationsCategoryPerformance;
+  inventoryAlerts:
+    OperationsInventoryAlerts;
 }
 
 const allowedPeriods = new Set([
@@ -70,24 +79,52 @@ function getDays(
 }
 
 
+
+function getInventoryPage(
+  value: string | undefined,
+): number {
+  const parsed = Number(value);
+
+  if (
+    !Number.isSafeInteger(parsed)
+    || parsed < 1
+  ) {
+    return 1;
+  }
+
+  return parsed;
+}
+
+
 async function loadDashboard(
   days: number,
+  inventoryPage: number,
 ): Promise<DashboardData | null> {
   try {
     const [
       summary,
       revenueTrend,
       orderStatuses,
+      categoryPerformance,
+      inventoryAlerts,
     ] = await Promise.all([
       getOperationsSummary(days),
       getOperationsRevenueTrend(days),
       getOperationsOrderStatuses(days),
+      getOperationsCategoryPerformance(days),
+      getOperationsInventoryAlerts({
+        threshold: 10,
+        page: inventoryPage,
+        pageSize: 10,
+      }),
     ]);
 
     if (
       !summary
       || !revenueTrend
       || !orderStatuses
+      || !categoryPerformance
+      || !inventoryAlerts
     ) {
       return null;
     }
@@ -96,6 +133,8 @@ async function loadDashboard(
       summary,
       revenueTrend,
       orderStatuses,
+      categoryPerformance,
+      inventoryAlerts,
     };
   } catch (error) {
     console.error(
@@ -440,6 +479,452 @@ function RevenueChart({
 }
 
 
+
+
+function createInventoryPageHref(
+  days: number,
+  page: number,
+): string {
+  const params = new URLSearchParams({
+    days: String(days),
+    inventory_page: String(page),
+  });
+
+  return (
+    `/admin/operations?${params.toString()}`
+    + "#inventory-health"
+  );
+}
+
+
+function inventoryStatusClasses(
+  status: OperationsInventoryStatus,
+): string {
+  switch (status) {
+    case "untracked":
+      return (
+        "bg-slate-100 text-slate-700"
+      );
+
+    case "out_of_stock":
+      return (
+        "bg-red-100 text-red-700"
+      );
+
+    case "critical_stock":
+      return (
+        "bg-amber-100 text-amber-800"
+      );
+
+    case "low_stock":
+      return (
+        "bg-blue-100 text-blue-700"
+      );
+  }
+}
+
+
+function CategoryPerformanceSection({
+  data,
+}: {
+  data: OperationsCategoryPerformance;
+}) {
+  return (
+    <section className="mt-10">
+      <div className="flex flex-wrap items-start justify-between gap-5">
+        <div>
+          <h2 className="text-2xl font-bold">
+            Category performance
+          </h2>
+
+          <p className="mt-2 text-slate-600">
+            Eligible-order sales, products, units,
+            and revenue contribution by category.
+          </p>
+        </div>
+
+        {data.start_date
+        && data.end_date ? (
+          <p className="text-sm text-slate-500">
+            {formatDate(data.start_date)}
+            {" – "}
+            {formatDate(data.end_date)}
+          </p>
+        ) : null}
+      </div>
+
+      {data.items.length > 0 ? (
+        <div className="mt-6 grid gap-5 lg:grid-cols-2">
+          {data.items.map(
+            (category) => (
+              <article
+                key={category.category_id}
+                className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"
+              >
+                <div className="flex flex-wrap items-start justify-between gap-4">
+                  <div>
+                    <h3 className="text-xl font-bold">
+                      {category.category_name}
+                    </h3>
+
+                    <p className="mt-2 text-sm text-slate-500">
+                      {formatNumber(
+                        category.products_sold,
+                      )}{" "}
+                      products sold
+                    </p>
+                  </div>
+
+                  <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
+                    {formatNumber(
+                      category.units_sold,
+                    )}{" "}
+                    units
+                  </span>
+                </div>
+
+                <div className="mt-5 grid grid-cols-2 gap-4 rounded-xl bg-slate-50 p-4">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                      Eligible orders
+                    </p>
+
+                    <p className="mt-1 text-lg font-bold">
+                      {formatNumber(
+                        category.eligible_orders,
+                      )}
+                    </p>
+                  </div>
+
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                      Units sold
+                    </p>
+
+                    <p className="mt-1 text-lg font-bold">
+                      {formatNumber(
+                        category.units_sold,
+                      )}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="mt-5 divide-y divide-slate-100">
+                  {category.revenue_by_currency.map(
+                    (currency) => (
+                      <div
+                        key={
+                          category.category_id
+                          + currency.currency_code
+                        }
+                        className="flex flex-wrap items-center justify-between gap-4 py-4 first:pt-0 last:pb-0"
+                      >
+                        <div>
+                          <p className="text-sm font-bold">
+                            {
+                              currency.currency_code
+                            }
+                          </p>
+
+                          <p className="mt-1 text-xs text-slate-500">
+                            {formatNumber(
+                              currency.units_sold,
+                            )}{" "}
+                            units ·{" "}
+                            {formatPercent(
+                              currency.revenue_share,
+                            )}{" "}
+                            of currency revenue
+                          </p>
+                        </div>
+
+                        <div className="text-right">
+                          <p className="font-bold">
+                            {formatCurrency(
+                              currency.gross_sales,
+                              currency.currency_code,
+                            )}
+                          </p>
+
+                          <p className="mt-1 text-xs text-slate-500">
+                            {formatCurrency(
+                              currency.average_unit_revenue,
+                              currency.currency_code,
+                            )}{" "}
+                            per unit
+                          </p>
+                        </div>
+                      </div>
+                    ),
+                  )}
+                </div>
+              </article>
+            ),
+          )}
+        </div>
+      ) : (
+        <div className="mt-6 rounded-2xl border border-slate-200 bg-white p-10 text-center text-slate-500 shadow-sm">
+          No eligible category sales were found
+          for this period.
+        </div>
+      )}
+    </section>
+  );
+}
+
+
+function InventoryHealthSection({
+  data,
+  days,
+}: {
+  data: OperationsInventoryAlerts;
+  days: number;
+}) {
+  return (
+    <section
+      id="inventory-health"
+      className="mt-10 scroll-mt-8"
+    >
+      <div className="flex flex-wrap items-start justify-between gap-5">
+        <div>
+          <h2 className="text-2xl font-bold">
+            Inventory health
+          </h2>
+
+          <p className="mt-2 text-slate-600">
+            Current stock snapshot. Products with
+            available quantity at or below{" "}
+            {data.low_stock_threshold} appear in
+            the alert queue.
+          </p>
+        </div>
+
+        <span className="rounded-full bg-slate-900 px-4 py-2 text-sm font-semibold text-white">
+          {formatNumber(
+            data.total_items,
+          )}{" "}
+          active alerts
+        </span>
+      </div>
+
+      <div className="mt-6 grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+        <MetricCard
+          label="Total products"
+          value={formatNumber(
+            data.total_products,
+          )}
+          detail="Marketplace catalogue"
+        />
+
+        <MetricCard
+          label="Critical stock"
+          value={formatNumber(
+            data.critical_stock_products,
+          )}
+          detail="Available quantity 1–5"
+        />
+
+        <MetricCard
+          label="Low stock"
+          value={formatNumber(
+            data.low_stock_products,
+          )}
+          detail={
+            `Available quantity 6–${
+              data.low_stock_threshold
+            }`
+          }
+        />
+
+        <MetricCard
+          label="Healthy stock"
+          value={formatNumber(
+            data.healthy_stock_products,
+          )}
+          detail={
+            `Above ${
+              data.low_stock_threshold
+            } available`
+          }
+        />
+
+        <MetricCard
+          label="Out of stock"
+          value={formatNumber(
+            data.out_of_stock_products,
+          )}
+          detail="Zero available"
+        />
+
+        <MetricCard
+          label="Untracked"
+          value={formatNumber(
+            data.untracked_products,
+          )}
+          detail="No inventory record"
+        />
+      </div>
+
+      <div className="mt-6 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <div className="flex flex-wrap items-start justify-between gap-4 border-b border-slate-200 px-6 py-5">
+          <div>
+            <h3 className="text-lg font-bold">
+              Inventory alert queue
+            </h3>
+
+            <p className="mt-1 text-sm text-slate-500">
+              Critical products appear before
+              low-stock products.
+            </p>
+          </div>
+
+          <p className="text-sm font-medium text-slate-500">
+            Page {data.page} of{" "}
+            {Math.max(data.total_pages, 1)}
+          </p>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="min-w-full divide-y divide-slate-200 text-left text-sm">
+            <thead className="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500">
+              <tr>
+                <th className="px-6 py-4">
+                  Product
+                </th>
+
+                <th className="px-6 py-4">
+                  Category
+                </th>
+
+                <th className="px-6 py-4">
+                  Available
+                </th>
+
+                <th className="px-6 py-4">
+                  Reserved
+                </th>
+
+                <th className="px-6 py-4">
+                  Status
+                </th>
+              </tr>
+            </thead>
+
+            <tbody className="divide-y divide-slate-100">
+              {data.items.map(
+                (item) => (
+                  <tr
+                    key={item.product_id}
+                    className="align-top"
+                  >
+                    <td className="px-6 py-4">
+                      <p className="font-semibold text-slate-950">
+                        {item.product_name}
+                      </p>
+
+                      <p className="mt-1 text-xs text-slate-500">
+                        {item.brand}
+                        {item.sku
+                          ? ` · ${item.sku}`
+                          : ""}
+                      </p>
+                    </td>
+
+                    <td className="px-6 py-4 text-slate-600">
+                      {item.category_name}
+                    </td>
+
+                    <td className="px-6 py-4 font-semibold">
+                      {
+                        item.available_quantity
+                        ?? "—"
+                      }
+                    </td>
+
+                    <td className="px-6 py-4 text-slate-600">
+                      {
+                        item.reserved_quantity
+                        ?? "—"
+                      }
+                    </td>
+
+                    <td className="px-6 py-4">
+                      <span
+                        className={
+                          "inline-flex rounded-full "
+                          + "px-3 py-1 text-xs "
+                          + "font-semibold "
+                          + inventoryStatusClasses(
+                            item.inventory_status,
+                          )
+                        }
+                      >
+                        {statusLabel(
+                          item.inventory_status,
+                        )}
+                      </span>
+                    </td>
+                  </tr>
+                ),
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        {data.items.length === 0 ? (
+          <div className="px-6 py-12 text-center text-sm text-slate-500">
+            No inventory alerts were found on
+            this page.
+          </div>
+        ) : null}
+
+        {data.total_pages > 1 ? (
+          <nav className="flex items-center justify-center gap-4 border-t border-slate-200 px-6 py-5">
+            {data.page > 1 ? (
+              <Link
+                href={createInventoryPageHref(
+                  days,
+                  data.page - 1,
+                )}
+                className="rounded-xl border border-slate-300 bg-white px-5 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+              >
+                Previous
+              </Link>
+            ) : (
+              <span className="cursor-not-allowed rounded-xl border border-slate-200 bg-slate-100 px-5 py-3 text-sm font-semibold text-slate-400">
+                Previous
+              </span>
+            )}
+
+            <span className="text-sm font-medium text-slate-600">
+              Page {data.page} of{" "}
+              {data.total_pages}
+            </span>
+
+            {data.page
+            < data.total_pages ? (
+              <Link
+                href={createInventoryPageHref(
+                  days,
+                  data.page + 1,
+                )}
+                className="rounded-xl border border-slate-300 bg-white px-5 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+              >
+                Next
+              </Link>
+            ) : (
+              <span className="cursor-not-allowed rounded-xl border border-slate-200 bg-slate-100 px-5 py-3 text-sm font-semibold text-slate-400">
+                Next
+              </span>
+            )}
+          </nav>
+        ) : null}
+      </div>
+    </section>
+  );
+}
+
+
 function DashboardUnavailable() {
   return (
     <main className="min-h-screen bg-slate-50 text-slate-950">
@@ -489,8 +974,16 @@ export default async function OperationsPage({
     getFirstValue(params.days),
   );
 
+  const inventoryPage =
+    getInventoryPage(
+      getFirstValue(
+        params.inventory_page,
+      ),
+    );
+
   const data = await loadDashboard(
     days,
+    inventoryPage,
   );
 
   if (!data) {
@@ -501,6 +994,8 @@ export default async function OperationsPage({
     summary,
     revenueTrend,
     orderStatuses,
+    categoryPerformance,
+    inventoryAlerts,
   } = data;
 
   const deliveredRate =
@@ -741,6 +1236,15 @@ export default async function OperationsPage({
             )}
           </div>
         </div>
+
+        <CategoryPerformanceSection
+          data={categoryPerformance}
+        />
+
+        <InventoryHealthSection
+          data={inventoryAlerts}
+          days={days}
+        />
 
         <div className="mt-10 rounded-2xl border border-slate-200 bg-white p-7 shadow-sm">
           <div className="flex flex-wrap items-start justify-between gap-5">
