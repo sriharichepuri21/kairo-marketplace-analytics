@@ -15,6 +15,7 @@ from sqlalchemy import (
 from sqlalchemy.orm import Session
 
 from app.models.category import Category
+from app.models.customer_event import CustomerEvent
 from app.models.inventory import Inventory
 from app.models.order import (
     Order,
@@ -753,4 +754,253 @@ class OperationsRepository:
             summary,
             list(rows),
             int(total_items or 0),
+        )
+
+    @classmethod
+    def get_conversion_funnel(
+        cls,
+        database: Session,
+        *,
+        days: int,
+    ) -> tuple[
+        date | None,
+        date | None,
+        Any | None,
+    ]:
+        (
+            start_date,
+            end_date,
+        ) = cls.get_analysis_window(
+            database,
+            days=days,
+        )
+
+        if (
+            start_date is None
+            or end_date is None
+        ):
+            return (
+                start_date,
+                end_date,
+                None,
+            )
+
+        session_steps = (
+            select(
+                CustomerEvent.session_id.label(
+                    "session_id"
+                ),
+
+                func.min(
+                    CustomerEvent.occurred_at
+                )
+                .filter(
+                    CustomerEvent.event_type
+                    == "product_view"
+                )
+                .label("first_view_at"),
+
+                func.min(
+                    CustomerEvent.occurred_at
+                )
+                .filter(
+                    CustomerEvent.event_type
+                    == "add_to_cart"
+                )
+                .label("first_cart_at"),
+
+                func.min(
+                    CustomerEvent.occurred_at
+                )
+                .filter(
+                    CustomerEvent.event_type
+                    == "checkout_started"
+                )
+                .label("first_checkout_at"),
+
+                func.min(
+                    CustomerEvent.occurred_at
+                )
+                .filter(
+                    CustomerEvent.event_type
+                    == "order_placed"
+                )
+                .label("first_order_at"),
+            )
+            .where(
+                CustomerEvent.session_id
+                .is_not(None),
+
+                CustomerEvent.event_type.in_(
+                    (
+                        "product_view",
+                        "add_to_cart",
+                        "checkout_started",
+                        "order_placed",
+                    )
+                ),
+            )
+            .group_by(
+                CustomerEvent.session_id
+            )
+            .subquery()
+        )
+
+        valid_cart = and_(
+            session_steps.c.first_cart_at
+            .is_not(None),
+
+            session_steps.c.first_cart_at
+            >= session_steps.c.first_view_at,
+        )
+
+        valid_checkout = and_(
+            valid_cart,
+
+            session_steps.c.first_checkout_at
+            .is_not(None),
+
+            session_steps.c.first_checkout_at
+            >= session_steps.c.first_cart_at,
+        )
+
+        valid_order = and_(
+            valid_checkout,
+
+            session_steps.c.first_order_at
+            .is_not(None),
+
+            session_steps.c.first_order_at
+            >= session_steps.c.first_checkout_at,
+        )
+
+        summary = database.execute(
+            select(
+                func.count().label(
+                    "total_sessions"
+                ),
+
+                func.count().label(
+                    "product_view_sessions"
+                ),
+
+                func.coalesce(
+                    func.sum(
+                        case(
+                            (
+                                valid_cart,
+                                1,
+                            ),
+                            else_=0,
+                        )
+                    ),
+                    0,
+                ).label(
+                    "add_to_cart_sessions"
+                ),
+
+                func.coalesce(
+                    func.sum(
+                        case(
+                            (
+                                valid_checkout,
+                                1,
+                            ),
+                            else_=0,
+                        )
+                    ),
+                    0,
+                ).label(
+                    "checkout_started_sessions"
+                ),
+
+                func.coalesce(
+                    func.sum(
+                        case(
+                            (
+                                valid_order,
+                                1,
+                            ),
+                            else_=0,
+                        )
+                    ),
+                    0,
+                ).label(
+                    "order_placed_sessions"
+                ),
+
+                func.coalesce(
+                    func.sum(
+                        case(
+                            (
+                                valid_cart,
+                                0,
+                            ),
+                            else_=1,
+                        )
+                    ),
+                    0,
+                ).label(
+                    "view_dropoffs"
+                ),
+
+                func.coalesce(
+                    func.sum(
+                        case(
+                            (
+                                valid_checkout,
+                                0,
+                            ),
+                            (
+                                valid_cart,
+                                1,
+                            ),
+                            else_=0,
+                        )
+                    ),
+                    0,
+                ).label(
+                    "cart_dropoffs"
+                ),
+
+                func.coalesce(
+                    func.sum(
+                        case(
+                            (
+                                valid_order,
+                                0,
+                            ),
+                            (
+                                valid_checkout,
+                                1,
+                            ),
+                            else_=0,
+                        )
+                    ),
+                    0,
+                ).label(
+                    "checkout_dropoffs"
+                ),
+            )
+            .select_from(session_steps)
+            .where(
+                session_steps.c.first_view_at
+                .is_not(None),
+
+                func.date(
+                    session_steps.c.first_view_at
+                )
+                >= start_date,
+
+                func.date(
+                    session_steps.c.first_view_at
+                )
+                <= end_date,
+            )
+        ).one()
+
+        return (
+            start_date,
+            end_date,
+            summary,
         )

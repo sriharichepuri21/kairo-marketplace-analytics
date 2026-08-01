@@ -1049,3 +1049,189 @@ def test_catalog_analytics_query_validation(
     )
 
     assert response.status_code == 422
+
+def test_conversion_funnel_requires_authentication(
+    operations_context: OperationsContext,
+) -> None:
+    response = client.get(
+        
+            "/api/v1/admin/operations/"
+            "conversion-funnel?days=90"
+        
+    )
+
+    assert response.status_code == 401
+
+
+def test_customer_cannot_access_conversion_funnel(
+    operations_context: OperationsContext,
+) -> None:
+    response = client.get(
+        (
+            "/api/v1/admin/operations/"
+            "conversion-funnel?days=90"
+        ),
+        headers=(
+            operations_context[
+                "customer"
+            ]["headers"]
+        ),
+    )
+
+    assert response.status_code == 403
+
+
+def test_admin_can_get_conversion_funnel(
+    operations_context: OperationsContext,
+) -> None:
+    response = client.get(
+        (
+            "/api/v1/admin/operations/"
+            "conversion-funnel?days=3650"
+        ),
+        headers=(
+            operations_context[
+                "admin"
+            ]["headers"]
+        ),
+    )
+
+    assert response.status_code == 200
+
+    payload = response.json()
+
+    assert payload["days"] == 3650
+    assert payload["start_date"] is not None
+    assert payload["end_date"] is not None
+
+    product_views = payload[
+        "product_view_sessions"
+    ]
+    cart_sessions = payload[
+        "add_to_cart_sessions"
+    ]
+    checkout_sessions = payload[
+        "checkout_started_sessions"
+    ]
+    order_sessions = payload[
+        "order_placed_sessions"
+    ]
+
+    assert (
+        payload["total_sessions"]
+        == product_views
+    )
+
+    assert (
+        product_views
+        >= cart_sessions
+        >= checkout_sessions
+        >= order_sessions
+        >= 0
+    )
+
+    assert (
+        payload["view_dropoffs"]
+        == product_views - cart_sessions
+    )
+
+    assert (
+        payload["cart_dropoffs"]
+        == cart_sessions - checkout_sessions
+    )
+
+    assert (
+        payload["checkout_dropoffs"]
+        == checkout_sessions - order_sessions
+    )
+
+    expected_view_to_cart = (
+        round(
+            cart_sessions / product_views,
+            4,
+        )
+        if product_views
+        else 0
+    )
+
+    expected_cart_to_checkout = (
+        round(
+            checkout_sessions / cart_sessions,
+            4,
+        )
+        if cart_sessions
+        else 0
+    )
+
+    expected_checkout_to_order = (
+        round(
+            order_sessions / checkout_sessions,
+            4,
+        )
+        if checkout_sessions
+        else 0
+    )
+
+    expected_overall_conversion = (
+        round(
+            order_sessions / product_views,
+            4,
+        )
+        if product_views
+        else 0
+    )
+
+    assert payload[
+        "view_to_cart_rate"
+    ] == pytest.approx(
+        expected_view_to_cart,
+        abs=0.0001,
+    )
+
+    assert payload[
+        "cart_to_checkout_rate"
+    ] == pytest.approx(
+        expected_cart_to_checkout,
+        abs=0.0001,
+    )
+
+    assert payload[
+        "checkout_to_order_rate"
+    ] == pytest.approx(
+        expected_checkout_to_order,
+        abs=0.0001,
+    )
+
+    assert payload[
+        "overall_conversion_rate"
+    ] == pytest.approx(
+        expected_overall_conversion,
+        abs=0.0001,
+    )
+
+
+@pytest.mark.parametrize(
+    "days",
+    [
+        0,
+        3651,
+    ],
+)
+def test_conversion_funnel_days_validation(
+    operations_context: OperationsContext,
+    days: int,
+) -> None:
+    response = client.get(
+        (
+            "/api/v1/admin/operations/"
+            f"conversion-funnel?days={days}"
+        ),
+        headers=(
+            operations_context[
+                "admin"
+            ]["headers"]
+        ),
+    )
+
+    assert response.status_code == 422
+

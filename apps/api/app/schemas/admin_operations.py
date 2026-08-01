@@ -146,3 +146,42 @@ class OperationsInventoryAlertsResponse(BaseModel):
     items: list[
         OperationsInventoryAlertItem
     ]
+
+class OperationsConversionFunnelResponse(
+    BaseModel
+):
+    days: int
+    start_date: date | None
+    end_date: date | None
+
+    total_sessions: int
+
+    product_view_sessions: int
+    add_to_cart_sessions: int
+    checkout_started_sessions: int
+    order_placed_sessions: int
+
+    view_dropoffs: int
+    cart_dropoffs: int
+    checkout_dropoffs: int
+
+    view_to_cart_rate: float = Field(
+        ge=0,
+        le=1,
+    )
+
+    cart_to_checkout_rate: float = Field(
+        ge=0,
+        le=1,
+    )
+
+    checkout_to_order_rate: float = Field(
+        ge=0,
+        le=1,
+    )
+
+    overall_conversion_rate: float = Field(
+        ge=0,
+        le=1,
+    )
+

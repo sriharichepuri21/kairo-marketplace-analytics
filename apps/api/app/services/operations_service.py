@@ -13,6 +13,7 @@ from app.schemas.admin_operations import (
     OperationsCategoryCurrencySummary,
     OperationsCategoryPerformanceItem,
     OperationsCategoryPerformanceResponse,
+    OperationsConversionFunnelResponse,
     OperationsCurrencySummary,
     OperationsInventoryAlertItem,
     OperationsInventoryAlertsResponse,
@@ -50,6 +51,19 @@ def string_value(
     )
 
     return str(enum_value)
+
+
+def conversion_rate(
+    numerator: int,
+    denominator: int,
+) -> float:
+    if denominator == 0:
+        return 0
+
+    return round(
+        numerator / denominator,
+        4,
+    )
 
 
 class OperationsService:
@@ -460,4 +474,117 @@ class OperationsService:
                 else 0
             ),
             items=items,
+        )
+
+    @staticmethod
+    def get_conversion_funnel(
+        database: Session,
+        *,
+        days: int,
+    ) -> OperationsConversionFunnelResponse:
+        (
+            start_date,
+            end_date,
+            summary,
+        ) = (
+            OperationsRepository
+            .get_conversion_funnel(
+                database,
+                days=days,
+            )
+        )
+
+        if summary is None:
+            return (
+                OperationsConversionFunnelResponse(
+                    days=days,
+                    start_date=start_date,
+                    end_date=end_date,
+                    total_sessions=0,
+                    product_view_sessions=0,
+                    add_to_cart_sessions=0,
+                    checkout_started_sessions=0,
+                    order_placed_sessions=0,
+                    view_dropoffs=0,
+                    cart_dropoffs=0,
+                    checkout_dropoffs=0,
+                    view_to_cart_rate=0,
+                    cart_to_checkout_rate=0,
+                    checkout_to_order_rate=0,
+                    overall_conversion_rate=0,
+                )
+            )
+
+        product_views = int(
+            summary.product_view_sessions
+            or 0
+        )
+
+        cart_sessions = int(
+            summary.add_to_cart_sessions
+            or 0
+        )
+
+        checkout_sessions = int(
+            summary.checkout_started_sessions
+            or 0
+        )
+
+        order_sessions = int(
+            summary.order_placed_sessions
+            or 0
+        )
+
+        return OperationsConversionFunnelResponse(
+            days=days,
+            start_date=start_date,
+            end_date=end_date,
+            total_sessions=int(
+                summary.total_sessions or 0
+            ),
+            product_view_sessions=(
+                product_views
+            ),
+            add_to_cart_sessions=(
+                cart_sessions
+            ),
+            checkout_started_sessions=(
+                checkout_sessions
+            ),
+            order_placed_sessions=(
+                order_sessions
+            ),
+            view_dropoffs=int(
+                summary.view_dropoffs or 0
+            ),
+            cart_dropoffs=int(
+                summary.cart_dropoffs or 0
+            ),
+            checkout_dropoffs=int(
+                summary.checkout_dropoffs or 0
+            ),
+            view_to_cart_rate=(
+                conversion_rate(
+                    cart_sessions,
+                    product_views,
+                )
+            ),
+            cart_to_checkout_rate=(
+                conversion_rate(
+                    checkout_sessions,
+                    cart_sessions,
+                )
+            ),
+            checkout_to_order_rate=(
+                conversion_rate(
+                    order_sessions,
+                    checkout_sessions,
+                )
+            ),
+            overall_conversion_rate=(
+                conversion_rate(
+                    order_sessions,
+                    product_views,
+                )
+            ),
         )

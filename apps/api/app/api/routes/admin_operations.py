@@ -11,6 +11,7 @@ from app.api.dependencies.auth import AdminUser
 from app.core.database import get_db
 from app.schemas.admin_operations import (
     OperationsCategoryPerformanceResponse,
+    OperationsConversionFunnelResponse,
     OperationsInventoryAlertsResponse,
     OperationsOrderStatusResponse,
     OperationsRevenueTrendResponse,
@@ -139,3 +140,24 @@ def get_operations_inventory_alerts(
         page=page,
         page_size=page_size,
     )
+
+@router.get(
+    "/conversion-funnel",
+    response_model=(
+        OperationsConversionFunnelResponse
+    ),
+    summary="Get customer conversion funnel",
+)
+def get_operations_conversion_funnel(
+    _admin_user: AdminUser,
+    database: DatabaseSession,
+    days: AnalysisDays = 90,
+) -> OperationsConversionFunnelResponse:
+    return (
+        OperationsService
+        .get_conversion_funnel(
+            database,
+            days=days,
+        )
+    )
+
