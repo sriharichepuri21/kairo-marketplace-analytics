@@ -536,19 +536,313 @@ def main() -> None:
 
     connection.execute(
         """
-        CREATE OR REPLACE TEMP VIEW prepared_customer_events AS
+        CREATE OR REPLACE TEMP VIEW funnel_event_seed_pool AS
+        SELECT
+            row_number() OVER (
+                ORDER BY
+                    oi.source_order_item_id
+            ) - 1 AS seed_index,
+            oi.source_order_item_id,
+            oi.product_id,
+            o.user_id,
+            o.order_placed_at
+        FROM prepared_order_items AS oi
+        INNER JOIN prepared_orders AS o
+            ON o.id = oi.order_id
+        """
+    )
+
+    connection.execute(
+        """
+        CREATE OR REPLACE TEMP VIEW funnel_event_seed_count AS
+        SELECT
+            count(*) AS seed_count
+        FROM funnel_event_seed_pool
+        """
+    )
+
+    connection.execute(
+        """
+        CREATE OR REPLACE TEMP VIEW
+        prepared_abandoned_session_events AS
+
+        -- View-only sessions: 84,000 sessions and events.
         SELECT
             stable_uuid(
-                'kairo-demo-event:view:' || oi.source_order_item_id
+                'kairo-demo-abandon-view:event:view:'
+                || CAST(
+                    generated.session_index
+                    AS VARCHAR
+                )
+            ) AS id,
+            seed.user_id,
+            'demo-session-view-dropoff-'
+                || lpad(
+                    CAST(
+                        generated.session_index
+                        AS VARCHAR
+                    ),
+                    6,
+                    '0'
+                ) AS session_id,
+            'product_view' AS event_type,
+            seed.product_id,
+            NULL::VARCHAR AS order_id,
+            (
+                '{"source":"synthetic_demo",'
+                || '"funnel_stage":"discovery",'
+                || '"journey_outcome":"view_abandonment"}'
+            ) AS properties,
+            seed.order_placed_at
+                - INTERVAL '45 minutes'
+                AS occurred_at
+        FROM range(
+            0,
+            84000
+        ) AS generated(session_index)
+        CROSS JOIN funnel_event_seed_count AS counts
+        INNER JOIN funnel_event_seed_pool AS seed
+            ON seed.seed_index = (
+                generated.session_index
+                % counts.seed_count
+            )
+
+        UNION ALL
+
+        -- Cart-drop-off sessions: product view.
+        SELECT
+            stable_uuid(
+                'kairo-demo-abandon-cart:event:view:'
+                || CAST(
+                    generated.session_index
+                    AS VARCHAR
+                )
+            ),
+            seed.user_id,
+            'demo-session-cart-dropoff-'
+                || lpad(
+                    CAST(
+                        generated.session_index
+                        AS VARCHAR
+                    ),
+                    6,
+                    '0'
+                ),
+            'product_view',
+            seed.product_id,
+            NULL::VARCHAR,
+            (
+                '{"source":"synthetic_demo",'
+                || '"funnel_stage":"discovery",'
+                || '"journey_outcome":"cart_abandonment"}'
+            ),
+            seed.order_placed_at
+                - INTERVAL '35 minutes'
+        FROM range(
+            0,
+            36000
+        ) AS generated(session_index)
+        CROSS JOIN funnel_event_seed_count AS counts
+        INNER JOIN funnel_event_seed_pool AS seed
+            ON seed.seed_index = (
+                generated.session_index
+                % counts.seed_count
+            )
+
+        UNION ALL
+
+        -- Cart-drop-off sessions: add to cart.
+        SELECT
+            stable_uuid(
+                'kairo-demo-abandon-cart:event:cart:'
+                || CAST(
+                    generated.session_index
+                    AS VARCHAR
+                )
+            ),
+            seed.user_id,
+            'demo-session-cart-dropoff-'
+                || lpad(
+                    CAST(
+                        generated.session_index
+                        AS VARCHAR
+                    ),
+                    6,
+                    '0'
+                ),
+            'add_to_cart',
+            seed.product_id,
+            NULL::VARCHAR,
+            (
+                '{"source":"synthetic_demo",'
+                || '"funnel_stage":"consideration",'
+                || '"journey_outcome":"cart_abandonment"}'
+            ),
+            seed.order_placed_at
+                - INTERVAL '15 minutes'
+        FROM range(
+            0,
+            36000
+        ) AS generated(session_index)
+        CROSS JOIN funnel_event_seed_count AS counts
+        INNER JOIN funnel_event_seed_pool AS seed
+            ON seed.seed_index = (
+                generated.session_index
+                % counts.seed_count
+            )
+
+        UNION ALL
+
+        -- Checkout-drop-off sessions: product view.
+        SELECT
+            stable_uuid(
+                'kairo-demo-abandon-checkout:event:view:'
+                || CAST(
+                    generated.session_index
+                    AS VARCHAR
+                )
+            ),
+            seed.user_id,
+            'demo-session-checkout-dropoff-'
+                || lpad(
+                    CAST(
+                        generated.session_index
+                        AS VARCHAR
+                    ),
+                    6,
+                    '0'
+                ),
+            'product_view',
+            seed.product_id,
+            NULL::VARCHAR,
+            (
+                '{"source":"synthetic_demo",'
+                || '"funnel_stage":"discovery",'
+                || '"journey_outcome":"checkout_abandonment"}'
+            ),
+            seed.order_placed_at
+                - INTERVAL '30 minutes'
+        FROM range(
+            0,
+            17000
+        ) AS generated(session_index)
+        CROSS JOIN funnel_event_seed_count AS counts
+        INNER JOIN funnel_event_seed_pool AS seed
+            ON seed.seed_index = (
+                generated.session_index
+                % counts.seed_count
+            )
+
+        UNION ALL
+
+        -- Checkout-drop-off sessions: add to cart.
+        SELECT
+            stable_uuid(
+                'kairo-demo-abandon-checkout:event:cart:'
+                || CAST(
+                    generated.session_index
+                    AS VARCHAR
+                )
+            ),
+            seed.user_id,
+            'demo-session-checkout-dropoff-'
+                || lpad(
+                    CAST(
+                        generated.session_index
+                        AS VARCHAR
+                    ),
+                    6,
+                    '0'
+                ),
+            'add_to_cart',
+            seed.product_id,
+            NULL::VARCHAR,
+            (
+                '{"source":"synthetic_demo",'
+                || '"funnel_stage":"consideration",'
+                || '"journey_outcome":"checkout_abandonment"}'
+            ),
+            seed.order_placed_at
+                - INTERVAL '10 minutes'
+        FROM range(
+            0,
+            17000
+        ) AS generated(session_index)
+        CROSS JOIN funnel_event_seed_count AS counts
+        INNER JOIN funnel_event_seed_pool AS seed
+            ON seed.seed_index = (
+                generated.session_index
+                % counts.seed_count
+            )
+
+        UNION ALL
+
+        -- Checkout-drop-off sessions: checkout started.
+        SELECT
+            stable_uuid(
+                'kairo-demo-abandon-checkout:event:checkout:'
+                || CAST(
+                    generated.session_index
+                    AS VARCHAR
+                )
+            ),
+            seed.user_id,
+            'demo-session-checkout-dropoff-'
+                || lpad(
+                    CAST(
+                        generated.session_index
+                        AS VARCHAR
+                    ),
+                    6,
+                    '0'
+                ),
+            'checkout_started',
+            NULL::VARCHAR,
+            NULL::VARCHAR,
+            (
+                '{"source":"synthetic_demo",'
+                || '"funnel_stage":"checkout",'
+                || '"journey_outcome":"checkout_abandonment"}'
+            ),
+            seed.order_placed_at
+                - INTERVAL '2 minutes'
+        FROM range(
+            0,
+            17000
+        ) AS generated(session_index)
+        CROSS JOIN funnel_event_seed_count AS counts
+        INNER JOIN funnel_event_seed_pool AS seed
+            ON seed.seed_index = (
+                generated.session_index
+                % counts.seed_count
+            )
+        """
+    )
+
+    connection.execute(
+        """
+        CREATE OR REPLACE TEMP VIEW prepared_customer_events AS
+
+        -- Existing completed order sessions.
+        SELECT
+            stable_uuid(
+                'kairo-demo-event:view:'
+                || oi.source_order_item_id
             ) AS id,
             o.user_id,
-            'demo-session-' || o.source_order_id AS session_id,
+            'demo-session-'
+                || o.source_order_id
+                AS session_id,
             'product_view' AS event_type,
             oi.product_id,
             NULL::VARCHAR AS order_id,
-            '{"source":"synthetic_demo","funnel_stage":"discovery"}'
-                AS properties,
-            o.order_placed_at - INTERVAL '30 minutes'
+            (
+                '{"source":"synthetic_demo",'
+                || '"funnel_stage":"discovery",'
+                || '"journey_outcome":"conversion"}'
+            ) AS properties,
+            o.order_placed_at
+                - INTERVAL '30 minutes'
                 AS occurred_at
         FROM prepared_order_items AS oi
         INNER JOIN prepared_orders AS o
@@ -558,15 +852,22 @@ def main() -> None:
 
         SELECT
             stable_uuid(
-                'kairo-demo-event:cart:' || oi.source_order_item_id
+                'kairo-demo-event:cart:'
+                || oi.source_order_item_id
             ),
             o.user_id,
-            'demo-session-' || o.source_order_id,
+            'demo-session-'
+                || o.source_order_id,
             'add_to_cart',
             oi.product_id,
             NULL::VARCHAR,
-            '{"source":"synthetic_demo","funnel_stage":"consideration"}',
-            o.order_placed_at - INTERVAL '10 minutes'
+            (
+                '{"source":"synthetic_demo",'
+                || '"funnel_stage":"consideration",'
+                || '"journey_outcome":"conversion"}'
+            ),
+            o.order_placed_at
+                - INTERVAL '10 minutes'
         FROM prepared_order_items AS oi
         INNER JOIN prepared_orders AS o
             ON o.id = oi.order_id
@@ -575,31 +876,50 @@ def main() -> None:
 
         SELECT
             stable_uuid(
-                'kairo-demo-event:checkout:' || source_order_id
+                'kairo-demo-event:checkout:'
+                || source_order_id
             ),
             user_id,
-            'demo-session-' || source_order_id,
+            'demo-session-'
+                || source_order_id,
             'checkout_started',
             NULL::VARCHAR,
             id,
-            '{"source":"synthetic_demo","funnel_stage":"checkout"}',
-            order_placed_at - INTERVAL '2 minutes'
+            (
+                '{"source":"synthetic_demo",'
+                || '"funnel_stage":"checkout",'
+                || '"journey_outcome":"conversion"}'
+            ),
+            order_placed_at
+                - INTERVAL '2 minutes'
         FROM prepared_orders
 
         UNION ALL
 
         SELECT
             stable_uuid(
-                'kairo-demo-event:order:' || source_order_id
+                'kairo-demo-event:order:'
+                || source_order_id
             ),
             user_id,
-            'demo-session-' || source_order_id,
+            'demo-session-'
+                || source_order_id,
             'order_placed',
             NULL::VARCHAR,
             id,
-            '{"source":"synthetic_demo","funnel_stage":"conversion"}',
+            (
+                '{"source":"synthetic_demo",'
+                || '"funnel_stage":"conversion",'
+                || '"journey_outcome":"conversion"}'
+            ),
             order_placed_at
         FROM prepared_orders
+
+        UNION ALL
+
+        SELECT
+            *
+        FROM prepared_abandoned_session_events
         """
     )
 
@@ -789,7 +1109,7 @@ def main() -> None:
         "orders": 50_000,
         "order_items": 108_932,
         "order_status_history": 50_000,
-        "customer_events": 317_864,
+        "customer_events": 524_864,
         "customer_churn_scores": 5_000,
     }
 
