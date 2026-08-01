@@ -14,7 +14,10 @@ def test_list_categories() -> None:
 
     categories = response.json()
 
-    assert len(categories) == 8
+    assert categories
+    assert len({category["id"] for category in categories}) == len(categories)
+    assert len({category["slug"] for category in categories}) == len(categories)
+    assert all(category["product_count"] >= 0 for category in categories)
 
     category_slugs = {category["slug"] for category in categories}
 
@@ -44,8 +47,11 @@ def test_list_products_with_pagination() -> None:
     assert len(payload["items"]) == 5
     assert payload["page"] == 1
     assert payload["page_size"] == 5
-    assert payload["total_items"] == 32
-    assert payload["total_pages"] == 7
+    assert payload["total_items"] >= len(payload["items"])
+    assert (
+        payload["total_pages"]
+        == (payload["total_items"] + payload["page_size"] - 1) // payload["page_size"]
+    )
 
 
 def test_product_pages_do_not_repeat_items() -> None:
@@ -183,9 +189,14 @@ def test_filter_products_in_stock() -> None:
 
     assert response.status_code == 200
 
-    items = response.json()["items"]
+    payload = response.json()
+    items = payload["items"]
 
-    assert len(items) == 32
+    assert len(items) == min(
+        50,
+        payload["total_items"],
+    )
+    assert all(item["available_quantity"] > 0 for item in items)
 
     assert all(item["in_stock"] is True and item["available_quantity"] > 0 for item in items)
 

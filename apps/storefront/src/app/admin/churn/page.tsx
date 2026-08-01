@@ -388,12 +388,21 @@ export default async function AdminChurnPage({
             </div>
 
             <div className="rounded-2xl border border-slate-700 bg-slate-900 px-5 py-4 text-sm">
-              <Link
-                href="/admin/operations"
-                className="mb-4 block whitespace-nowrap rounded-xl border border-slate-600 bg-slate-800 px-4 py-3 text-center text-sm font-semibold text-white transition hover:border-slate-400 hover:bg-slate-700"
-              >
-                View operations dashboard
-              </Link>
+              <div className="mb-4 space-y-3">
+                <Link
+                  href="/admin/operations"
+                  className="block whitespace-nowrap rounded-xl border border-slate-600 bg-slate-800 px-4 py-3 text-center text-sm font-semibold text-white transition hover:border-slate-400 hover:bg-slate-700"
+                >
+                  View operations dashboard
+                </Link>
+
+                <Link
+                  href="/admin/data-quality"
+                  className="block whitespace-nowrap rounded-xl border border-slate-600 bg-slate-800 px-4 py-3 text-center text-sm font-semibold text-white transition hover:border-slate-400 hover:bg-slate-700"
+                >
+                  View data-quality dashboard
+                </Link>
+              </div>
 
               <p className="text-slate-400">
                 Snapshot

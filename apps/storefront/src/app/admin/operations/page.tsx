@@ -1310,12 +1310,21 @@ export default async function OperationsPage({
               ) : null}
             </div>
 
-            <Link
-              href="/admin/churn"
-              className="rounded-xl border border-slate-300 bg-white px-5 py-3 text-sm font-semibold transition hover:border-slate-950"
-            >
-              View churn dashboard
-            </Link>
+            <div className="flex flex-wrap gap-3">
+              <Link
+                href="/admin/churn"
+                className="rounded-xl border border-slate-300 bg-white px-5 py-3 text-sm font-semibold transition hover:border-slate-950"
+              >
+                View churn dashboard
+              </Link>
+
+              <Link
+                href="/admin/data-quality"
+                className="rounded-xl border border-slate-300 bg-white px-5 py-3 text-sm font-semibold transition hover:border-slate-950"
+              >
+                View data-quality dashboard
+              </Link>
+            </div>
           </div>
         </div>
       </section>
