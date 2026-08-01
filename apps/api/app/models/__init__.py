@@ -3,6 +3,7 @@ from app.models.cart import Cart, CartItem
 from app.models.category import Category
 from app.models.customer_churn_score import CustomerChurnScore
 from app.models.customer_event import CustomerEvent
+from app.models.data_quality import DataQualityCheckResult, DataQualityRun
 from app.models.inventory import Inventory
 from app.models.order import (
     Order,
@@ -20,6 +21,8 @@ __all__ = [
     "Category",
     "CustomerChurnScore",
     "CustomerEvent",
+    "DataQualityCheckResult",
+    "DataQualityRun",
     "Inventory",
     "Order",
     "OrderItem",
