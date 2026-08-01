@@ -6,6 +6,7 @@ import {
 } from "@/lib/auth-server";
 import {
   getOperationsCategoryPerformance,
+  getOperationsConversionFunnel,
   getOperationsInventoryAlerts,
   getOperationsOrderStatuses,
   getOperationsRevenueTrend,
@@ -13,6 +14,7 @@ import {
 } from "@/lib/operations-server";
 import type {
   OperationsCategoryPerformance,
+  OperationsConversionFunnel,
   OperationsInventoryAlerts,
   OperationsInventoryStatus,
   OperationsOrderStatuses,
@@ -40,6 +42,8 @@ interface DashboardData {
   summary: OperationsSummary;
   revenueTrend: OperationsRevenueTrend;
   orderStatuses: OperationsOrderStatuses;
+  conversionFunnel:
+    OperationsConversionFunnel;
   categoryPerformance:
     OperationsCategoryPerformance;
   inventoryAlerts:
@@ -105,12 +109,14 @@ async function loadDashboard(
       summary,
       revenueTrend,
       orderStatuses,
+      conversionFunnel,
       categoryPerformance,
       inventoryAlerts,
     ] = await Promise.all([
       getOperationsSummary(days),
       getOperationsRevenueTrend(days),
       getOperationsOrderStatuses(days),
+      getOperationsConversionFunnel(days),
       getOperationsCategoryPerformance(days),
       getOperationsInventoryAlerts({
         threshold: 10,
@@ -123,6 +129,7 @@ async function loadDashboard(
       !summary
       || !revenueTrend
       || !orderStatuses
+      || !conversionFunnel
       || !categoryPerformance
       || !inventoryAlerts
     ) {
@@ -133,6 +140,7 @@ async function loadDashboard(
       summary,
       revenueTrend,
       orderStatuses,
+      conversionFunnel,
       categoryPerformance,
       inventoryAlerts,
     };
@@ -521,6 +529,253 @@ function inventoryStatusClasses(
         "bg-blue-100 text-blue-700"
       );
   }
+}
+
+
+
+
+function ConversionFunnelSection({
+  data,
+}: {
+  data: OperationsConversionFunnel;
+}) {
+  const stages = [
+    {
+      key: "product-view",
+      label: "Product views",
+      sessions: data.product_view_sessions,
+      conversionRate: null,
+      dropoffs: data.view_dropoffs,
+      nextStage: "add to cart",
+    },
+    {
+      key: "add-to-cart",
+      label: "Added to cart",
+      sessions: data.add_to_cart_sessions,
+      conversionRate:
+        data.view_to_cart_rate,
+      dropoffs: data.cart_dropoffs,
+      nextStage: "checkout",
+    },
+    {
+      key: "checkout-started",
+      label: "Checkout started",
+      sessions:
+        data.checkout_started_sessions,
+      conversionRate:
+        data.cart_to_checkout_rate,
+      dropoffs:
+        data.checkout_dropoffs,
+      nextStage: "order placement",
+    },
+    {
+      key: "order-placed",
+      label: "Orders placed",
+      sessions: data.order_placed_sessions,
+      conversionRate:
+        data.checkout_to_order_rate,
+      dropoffs: null,
+      nextStage: null,
+    },
+  ];
+
+  const funnelEntry =
+    data.product_view_sessions;
+
+  return (
+    <section
+      id="conversion-funnel"
+      className="mt-10 rounded-3xl border border-slate-200 bg-white p-7 shadow-sm"
+    >
+      <div className="flex flex-wrap items-start justify-between gap-5">
+        <div>
+          <p className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-500">
+            Customer journey
+          </p>
+
+          <h2 className="mt-2 text-2xl font-bold">
+            Conversion funnel
+          </h2>
+
+          <p className="mt-2 max-w-3xl leading-7 text-slate-600">
+            Session-level progression from product
+            discovery through completed order
+            placement.
+          </p>
+        </div>
+
+        <div className="rounded-2xl bg-slate-950 px-6 py-4 text-white">
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-300">
+            Overall conversion
+          </p>
+
+          <p className="mt-2 text-3xl font-bold">
+            {formatPercent(
+              data.overall_conversion_rate,
+            )}
+          </p>
+        </div>
+      </div>
+
+      {data.start_date
+      && data.end_date ? (
+        <p className="mt-4 text-sm text-slate-500">
+          {formatDate(data.start_date)}
+          {" – "}
+          {formatDate(data.end_date)}
+          {" · "}
+          {formatNumber(
+            data.total_sessions,
+          )}{" "}
+          funnel sessions
+        </p>
+      ) : null}
+
+      <div className="mt-8 grid gap-8 xl:grid-cols-[minmax(0,1.7fr)_minmax(280px,0.6fr)]">
+        <div className="space-y-6">
+          {stages.map((stage) => {
+            const width = funnelEntry > 0
+              ? Math.max(
+                  (
+                    stage.sessions
+                    / funnelEntry
+                  ) * 100,
+                  4,
+                )
+              : 0;
+
+            return (
+              <article key={stage.key}>
+                <div className="flex flex-wrap items-end justify-between gap-3">
+                  <div>
+                    <h3 className="font-semibold text-slate-950">
+                      {stage.label}
+                    </h3>
+
+                    <p className="mt-1 text-sm text-slate-500">
+                      {stage.conversionRate
+                        === null
+                        ? "Funnel entry"
+                        : (
+                            `${formatPercent(
+                              stage.conversionRate,
+                            )} from the previous stage`
+                          )}
+                    </p>
+                  </div>
+
+                  <p className="text-2xl font-bold">
+                    {formatNumber(
+                      stage.sessions,
+                    )}
+                  </p>
+                </div>
+
+                <div className="mt-3 h-5 overflow-hidden rounded-full bg-slate-100">
+                  <div
+                    className="h-full rounded-full bg-slate-950"
+                    style={{
+                      width: `${width}%`,
+                    }}
+                  />
+                </div>
+
+                {stage.dropoffs !== null
+                && stage.nextStage ? (
+                  <p className="mt-2 text-sm text-slate-500">
+                    {formatNumber(
+                      stage.dropoffs,
+                    )}{" "}
+                    sessions dropped before{" "}
+                    {stage.nextStage}
+                  </p>
+                ) : (
+                  <p className="mt-2 text-sm font-medium text-emerald-700">
+                    Completed marketplace orders
+                  </p>
+                )}
+              </article>
+            );
+          })}
+        </div>
+
+        <aside className="grid content-start gap-4 sm:grid-cols-2 xl:grid-cols-1">
+          <article className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
+            <p className="text-sm font-medium text-slate-500">
+              View → cart
+            </p>
+
+            <p className="mt-2 text-2xl font-bold">
+              {formatPercent(
+                data.view_to_cart_rate,
+              )}
+            </p>
+
+            <p className="mt-2 text-sm text-slate-500">
+              {formatNumber(
+                data.view_dropoffs,
+              )}{" "}
+              view-stage drop-offs
+            </p>
+          </article>
+
+          <article className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
+            <p className="text-sm font-medium text-slate-500">
+              Cart → checkout
+            </p>
+
+            <p className="mt-2 text-2xl font-bold">
+              {formatPercent(
+                data.cart_to_checkout_rate,
+              )}
+            </p>
+
+            <p className="mt-2 text-sm text-slate-500">
+              {formatNumber(
+                data.cart_dropoffs,
+              )}{" "}
+              cart abandonments
+            </p>
+          </article>
+
+          <article className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
+            <p className="text-sm font-medium text-slate-500">
+              Checkout → order
+            </p>
+
+            <p className="mt-2 text-2xl font-bold">
+              {formatPercent(
+                data.checkout_to_order_rate,
+              )}
+            </p>
+
+            <p className="mt-2 text-sm text-slate-500">
+              {formatNumber(
+                data.checkout_dropoffs,
+              )}{" "}
+              checkout abandonments
+            </p>
+          </article>
+
+          <article className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
+            <p className="text-sm font-medium text-slate-500">
+              Completed orders
+            </p>
+
+            <p className="mt-2 text-2xl font-bold">
+              {formatNumber(
+                data.order_placed_sessions,
+              )}
+            </p>
+
+            <p className="mt-2 text-sm text-slate-500">
+              Distinct converted sessions
+            </p>
+          </article>
+        </aside>
+      </div>
+    </section>
+  );
 }
 
 
@@ -994,6 +1249,7 @@ export default async function OperationsPage({
     summary,
     revenueTrend,
     orderStatuses,
+    conversionFunnel,
     categoryPerformance,
     inventoryAlerts,
   } = data;
@@ -1236,6 +1492,10 @@ export default async function OperationsPage({
             )}
           </div>
         </div>
+
+        <ConversionFunnelSection
+          data={conversionFunnel}
+        />
 
         <CategoryPerformanceSection
           data={categoryPerformance}

@@ -122,3 +122,25 @@ export interface OperationsInventoryAlerts {
   items: OperationsInventoryAlertItem[];
 }
 
+export interface OperationsConversionFunnel {
+  days: number;
+  start_date: string | null;
+  end_date: string | null;
+
+  total_sessions: number;
+
+  product_view_sessions: number;
+  add_to_cart_sessions: number;
+  checkout_started_sessions: number;
+  order_placed_sessions: number;
+
+  view_dropoffs: number;
+  cart_dropoffs: number;
+  checkout_dropoffs: number;
+
+  view_to_cart_rate: number;
+  cart_to_checkout_rate: number;
+  checkout_to_order_rate: number;
+  overall_conversion_rate: number;
+}
+

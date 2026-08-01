@@ -8,6 +8,7 @@ import {
 } from "@/lib/auth-server";
 import type {
   OperationsCategoryPerformance,
+  OperationsConversionFunnel,
   OperationsInventoryAlerts,
   OperationsOrderStatuses,
   OperationsRevenueTrend,
@@ -148,6 +149,30 @@ export async function getOperationsCategoryPerformance(
 
   return response.json() as Promise<
     OperationsCategoryPerformance
+  >;
+}
+
+
+export async function getOperationsConversionFunnel(
+  days: number,
+): Promise<OperationsConversionFunnel | null> {
+  const response =
+    await requireSuccessfulResponse(
+      await requestAuthenticatedApi(
+        (
+          "/api/v1/admin/operations/"
+          + `conversion-funnel?days=${days}`
+        ),
+      ),
+      "Unable to load conversion funnel.",
+    );
+
+  if (response === null) {
+    return null;
+  }
+
+  return response.json() as Promise<
+    OperationsConversionFunnel
   >;
 }
 
