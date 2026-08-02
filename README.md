@@ -1,26 +1,392 @@
-# 📊 Kairo Marketplace Business Intelligence Platform
+# Kairo Marketplace Analytics Platform
 
-An end-to-end Business Intelligence and analytics engineering project that simulates a global e-commerce marketplace—from synthetic operational data generation and production-style data-quality failures to governed dimensional models, financial reconciliation, point-in-time customer churn prediction, and interactive stakeholder dashboards.
+**A full-stack marketplace, analytics engineering, machine learning, and data-observability portfolio project.**
 
-## 🎯 What This Project Demonstrates
+Kairo simulates a global e-commerce marketplace from end to end: synthetic operational data generation, production-style data failures, governed dimensional models, financial reconciliation, point-in-time churn prediction, a customer-facing storefront, admin analytics, and persisted data-quality monitoring.
 
-- **Large-scale synthetic data generation** — 16M+ records across nine interconnected marketplace entities
-- **Production-style data-quality simulation** — duplicates, null variants, type drift, schema evolution, late-arriving records, orphan keys, and business-rule violations
-- **Medallion architecture** — Bronze, Silver, and Gold transformation layers built with dbt
-- **Dimensional modeling** — four dimensions, two fact tables, and four analytical marts
-- **Metric governance** — explicit Gross GMV, Net GMV, customer charged amount, and commission definitions
-- **Financial reconciliation** — $0 cross-model variance across governed marketplace, seller, and customer measures
-- **Automated testing** — 130 dbt data-quality tests: 125 passing checks and five documented warnings for intentionally injected chaos
-- **Stakeholder dashboards** — executive, category, regional, customer, seller, and churn-risk reporting in Streamlit
-- **Point-in-time machine learning** — temporal feature snapshots, out-of-time evaluation, production scoring, risk deciles, and retention actions
+> **Project status:** Core platform complete. The application is designed to run locally with Docker Compose; public cloud deployment is optional.
 
 ---
 
-## 📸 Dashboard Screenshots
+## Table of Contents
 
-### Executive Overview
+- [Project Overview](#project-overview)
+- [Platform at a Glance](#platform-at-a-glance)
+- [What the Project Demonstrates](#what-the-project-demonstrates)
+- [Architecture](#architecture)
+- [Application Features](#application-features)
+- [Analytics and Machine Learning](#analytics-and-machine-learning)
+- [Data Quality and Observability](#data-quality-and-observability)
+- [Screenshots](#screenshots)
+- [Technology Stack](#technology-stack)
+- [Repository Structure](#repository-structure)
+- [Local Setup](#local-setup)
+- [Analytics Pipeline](#analytics-pipeline)
+- [Testing and Validation](#testing-and-validation)
+- [Verified Business Metrics](#verified-business-metrics)
+- [Point-in-Time Churn System](#point-in-time-churn-system)
+- [Limitations](#limitations)
+- [License](#license)
 
-![Executive Overview](docs/screenshots/home_dashboard.png)
+---
+
+## Project Overview
+
+Kairo was built to answer a practical engineering and business question:
+
+> How can a marketplace turn fragmented operational activity into a trusted system for commerce, financial reporting, customer intelligence, and data-quality monitoring?
+
+The repository combines two connected platforms:
+
+1. **Operational marketplace application**
+   - Next.js storefront
+   - FastAPI REST API
+   - PostgreSQL transactional database
+   - Authentication, catalog, cart, checkout, orders, and event tracking
+   - Admin dashboards for operations, churn, and data quality
+
+2. **Analytical and machine-learning platform**
+   - Large-scale synthetic data generation
+   - Production-style chaos injection
+   - Bronze, Silver, and Gold dbt layers
+   - Governed marketplace metrics and reconciliation
+   - Streamlit stakeholder dashboards
+   - Point-in-time customer churn modeling and production scoring
+
+The result is not only a dashboard project. It is a locally reproducible, end-to-end data and software system.
+
+---
+
+## Platform at a Glance
+
+### Analytical Platform
+
+| Area | Verified scale or result |
+|---|---:|
+| Synthetic marketplace records | 16M+ |
+| Customers generated | 200K |
+| Sellers generated | 5K |
+| Products generated | 50K |
+| Orders generated | 2.87M |
+| Order items generated | 6.83M |
+| Payments generated | 2.99M |
+| Shipments generated | 2.50M |
+| Returns generated | 595K |
+| Reviews generated | 738K |
+| dbt build result | 153 pass, 5 warnings, 0 errors |
+| Passing dbt data tests | 125 |
+| Governed reconciliation variance | $0 across validated measures |
+
+### Operational Application
+
+| Entity or validation | Current local result |
+|---|---:|
+| Categories | 15 |
+| Products | 37,754 |
+| Users | 5,002 |
+| Orders | 50,003 |
+| Order items | 108,935 |
+| Customer events | 524,877 |
+| Distinct customer sessions | 187,001 |
+| Backend tests | 116 passed |
+| Operational quality checks | 16 |
+| Latest quality result | 15 passed, 1 warning, 0 failed |
+| Storefront ESLint | Passed |
+| Storefront TypeScript validation | Passed |
+
+Operational counts represent the current local synthetic demonstration database and can change when tests or new user activity create records.
+
+---
+
+## What the Project Demonstrates
+
+### Full-Stack Marketplace Engineering
+
+- Customer registration and JWT-based authentication
+- Role-based customer and administrator authorization
+- Product browsing, categories, ratings, prices, and inventory availability
+- Shopping-cart creation and item management
+- Address management and checkout workflows
+- Persisted orders, order items, and status history
+- Customer event collection for funnel analytics
+- Layered API design using routes, schemas, services, repositories, and SQLAlchemy models
+
+### Analytics Engineering
+
+- Large-scale synthetic data generation across nine interconnected entities
+- Production-style failure simulation:
+  - Duplicates and replayed records
+  - Null representation variants
+  - Type drift and schema evolution
+  - Late-arriving records
+  - Orphan foreign keys
+  - Invalid business-rule values
+  - Zombie test data
+- Bronze, Silver, and Gold transformation layers
+- Star-schema modeling with dimensions, facts, and analytical marts
+- Explicit governance for Gross GMV, Net GMV, customer charged amount, and commission revenue
+- Cross-model financial reconciliation
+- Operational-to-analytical data export workflows
+
+### Machine Learning
+
+- Historical point-in-time customer snapshots
+- Temporal training, validation, and test periods
+- Leakage-aware feature engineering
+- Out-of-time model evaluation
+- Churn probability scoring
+- Capacity-based risk deciles and segments
+- Retention-action recommendations
+- Score publication to both dbt Gold models and PostgreSQL
+
+### Data Quality and Observability
+
+- Persisted data-quality runs and check results
+- Availability, freshness, completeness, relationship, uniqueness, and validity checks
+- Warning and failure investigation views
+- Authenticated admin observability APIs
+- Historical run pagination and drill-down
+- A server-rendered data-quality dashboard
+- Automated API and runner tests
+
+---
+
+## Architecture
+
+```mermaid
+flowchart TD
+    subgraph A["Synthetic Analytics Platform"]
+        G["Python Data Generators<br/>Faker · Pydantic · Polars"]
+        C["Chaos Engine<br/>Duplicates · Nulls · Drift · Orphans"]
+        P["Parquet Data Lake<br/>Raw and Cleaned Datasets"]
+        D["dbt + DuckDB<br/>Bronze · Silver · Gold"]
+        R["Governance and Reconciliation<br/>GMV · Spend · Commission"]
+        M["Point-in-Time Churn ML<br/>Temporal Validation · Risk Actions"]
+        S["Streamlit BI Dashboards"]
+        G --> C --> P --> D
+        D --> R
+        D --> M
+        R --> S
+        M --> S
+    end
+
+    subgraph B["Operational Marketplace Application"]
+        DB["PostgreSQL 16<br/>Transactional and Observability Data"]
+        API["FastAPI REST API<br/>Auth · Catalog · Cart · Orders · Admin"]
+        WEB["Next.js Storefront<br/>Customer and Admin Experiences"]
+        Q["Operational Quality Runner<br/>16 Persisted Checks"]
+        DB --> API --> WEB
+        DB --> Q
+        Q --> API
+    end
+
+    D -->|"validated demo import"| DB
+    M -->|"live churn score sync"| DB
+    DB -->|"operational exports"| D
+```
+
+### End-to-End Data Flow
+
+```text
+Synthetic generation
+        ↓
+Chaos injection
+        ↓
+Parquet raw data
+        ↓
+dbt Bronze → Silver → Gold
+        ↓
+Governed metrics and reconciliation
+        ↓
+Point-in-time churn training and scoring
+        ↓
+Validated operational import
+        ↓
+PostgreSQL
+        ↓
+FastAPI
+        ↓
+Next.js storefront and admin dashboards
+        ↓
+Persisted quality monitoring and historical run analysis
+```
+
+---
+
+## Application Features
+
+### Customer Experience
+
+| Capability | Description |
+|---|---|
+| Authentication | Registration, login, JWT sessions, and protected pages |
+| Product catalog | Category browsing, pagination, product details, prices, ratings, and availability |
+| Cart | Add, update, remove, and clear cart items |
+| Addresses | Create, edit, select, and delete delivery addresses |
+| Checkout | Convert an authenticated cart into a persisted order |
+| Orders | Order history, order detail, totals, and status history |
+| Event tracking | Product views, cart activity, checkout starts, and order conversions |
+
+### Admin Operations Dashboard
+
+- Total and eligible order volume
+- Delivered and cancelled orders
+- Active-customer counts
+- Revenue trends by currency
+- Average order value
+- Order-status distribution
+- Category performance
+- Inventory alerts
+- Product-view-to-order conversion funnel
+
+### Admin Churn Dashboard
+
+- Latest eligible scoring population
+- Churn probability and model threshold
+- High-, medium-, and low-risk segments
+- Predicted churn flags
+- Recommended retention actions
+- Customer search and filtering
+- Individual customer detail views
+
+### Admin Data-Quality Dashboard
+
+- Overall health status
+- Passed, warning, and failed totals
+- Run timestamp, trigger, and duration
+- Observed versus expected values
+- Warning and failure investigation cards
+- Collapsible passed-check details
+- Historical run table and pagination
+- Run-level drill-down
+
+---
+
+## Analytics and Machine Learning
+
+### Medallion Modeling
+
+The analytical warehouse follows a governed medallion design:
+
+```text
+Bronze
+└── Raw Parquet ingestion and source preservation
+
+Silver
+├── Deduplication
+├── Null normalization
+├── Type casting
+├── Zombie-record filtering
+├── Referential-integrity controls
+└── Data-quality flags
+
+Gold
+├── dim_customers
+├── dim_sellers
+├── dim_products
+├── dim_dates
+├── fact_orders
+├── fact_order_items
+├── mart_gmv_daily
+├── mart_customer_ltv
+├── mart_seller_health
+└── mart_customer_churn_scores
+```
+
+### Governed Metric Definitions
+
+**Gross GMV**  
+Merchandise value before item-level discounts and tax.
+
+**Net GMV**  
+Gross GMV minus valid item discounts. Net GMV excludes tax and is the primary marketplace-volume measure.
+
+**Customer charged amount**  
+The amount charged to customers, including applicable tax and shipping.
+
+**Commission revenue**  
+Marketplace transaction revenue calculated by applying each seller's commission rate to Net GMV.
+
+`fact_order_items.line_total` is not used as GMV because it includes item-level tax.
+
+---
+
+## Data Quality and Observability
+
+### Operational Quality Checks
+
+The FastAPI quality runner executes and persists 16 checks.
+
+#### Availability and Freshness
+
+1. Database connectivity
+2. Orders freshness
+3. Customer-events freshness
+
+#### Relationships and Completeness
+
+4. Order items referencing missing orders
+5. Order items referencing missing products
+6. Active products without inventory
+7. Customer events without a customer or session actor
+8. Order events without an order identifier
+9. Paid or progressed orders missing an order event
+10. Pending unpaid orders missing an order event
+
+#### Uniqueness
+
+11. Duplicate order events
+12. Duplicate order numbers
+13. Duplicate customer email addresses
+
+#### Business-Rule Validity
+
+14. Invalid order amounts
+15. Invalid inventory quantities
+16. Invalid order-item line totals
+
+### Latest Verified Run
+
+```text
+Status:    warning
+Checks:    16
+Passed:    15
+Warnings:  1
+Failed:    0
+Duration:  approximately 369 ms
+```
+
+The warning represents one pending unpaid order without a corresponding order event. No critical checks failed.
+
+### Observability API
+
+```text
+GET /api/v1/admin/data-quality/latest
+GET /api/v1/admin/data-quality/runs
+GET /api/v1/admin/data-quality/runs/{run_id}
+```
+
+All endpoints require an authenticated administrator.
+
+---
+
+## Screenshots
+
+### Data-Quality Overview
+
+![Data-Quality Overview](docs/screenshots/admin_data_quality_overview.png)
+
+### Data-Quality Warning Detail
+
+![Data-Quality Warning Detail](docs/screenshots/admin_data_quality_warning.png)
+
+### Data-Quality Run History
+
+![Data-Quality Run History](docs/screenshots/admin_data_quality_history.png)
+
+### Executive Marketplace Overview
+
+![Executive Marketplace Overview](docs/screenshots/home_dashboard.png)
 
 ### Marketplace Performance and Customer Activity
 
@@ -46,9 +412,6 @@ An end-to-end Business Intelligence and analytics engineering project that simul
 
 ![Seller Intervention](docs/screenshots/seller_intervention.png)
 
----
-
-<!-- CHURN-SCREENSHOTS:START -->
 ### Customer Churn Risk Overview
 
 ![Customer Churn Risk Overview](docs/screenshots/customer_churn_overview.png)
@@ -64,99 +427,61 @@ An end-to-end Business Intelligence and analytics engineering project that simul
 ### Production Churn Model Performance
 
 ![Production Churn Model Performance](docs/screenshots/customer_churn_model_performance.png)
-<!-- CHURN-SCREENSHOTS:END -->
 
 ---
 
-## 🏗️ Architecture
+## Technology Stack
 
-```text
-Python Generators — Faker, Pydantic, Polars
-├── 200K customers
-├── 5K sellers
-├── 50K products
-├── 2.87M orders
-├── 6.83M order items
-├── 2.99M payments
-├── 2.50M shipments
-├── 595K returns
-└── 738K reviews
-                  │
-                  ▼
-Chaos Engine — 9 production-style injectors
-├── Duplicate and replayed records
-├── Null representation variants
-├── Type and schema drift
-├── Late-arriving records
-├── Orphan foreign keys
-├── Business-rule violations
-└── Zombie test data
-                  │
-                  ▼
-Bronze Layer — 9 dbt views
-└── Raw Parquet ingestion
-                  │
-                  ▼
-Silver Layer — 9 dbt tables
-├── Deduplication and null standardization
-├── Type casting and schema normalization
-├── Zombie-record filtering
-├── Referential-integrity controls
-└── Data-quality flags
-                  │
-                  ▼
-Gold Layer — 10 dbt tables
-├── dim_customers, dim_sellers, dim_products, dim_dates
-├── fact_orders, fact_order_items
-├── mart_gmv_daily
-├── mart_customer_ltv
-├── mart_seller_health
-└── mart_customer_churn_scores
-                  │
-                  ▼
-Governance, Testing, and Reconciliation
-├── Gross and Net GMV validation
-├── Unknown-customer member reconciliation
-├── Customer-spend reconciliation
-├── Seller-commission reconciliation
-└── 130 automated dbt tests
-                  │
-                  ▼
-Streamlit Business Intelligence Dashboards
-├── Executive overview
-├── Executive Weekly Business Review
-├── Category performance
-├── Seller health
-└── Customer churn risk
-```
-
----
-
-## 🛠️ Tech Stack
-
-| Layer | Tools |
+| Layer | Technologies |
 |---|---|
-| Language | Python 3.11 |
-| Data generation | Faker, Pydantic, Polars, NumPy |
+| Storefront | Next.js 16, React 19, TypeScript 5, Tailwind CSS 4 |
+| API | FastAPI, Python 3.12, Uvicorn, Pydantic |
+| API architecture | Routes, schemas, services, repositories, and SQLAlchemy models |
+| Authentication | JWT and Argon2 password hashing |
+| Operational database | PostgreSQL 16 |
+| Migrations | Alembic |
+| Containers | Docker and Docker Compose |
+| Data generation | Python, Faker, Pydantic, Polars, and NumPy |
 | Storage | Parquet with Zstandard compression |
-| Warehouse | DuckDB |
+| Analytical warehouse | DuckDB |
 | Transformation | dbt Core and dbt-duckdb |
-| Modeling | Star schema, fact tables, dimensions, and analytical marts |
-| Machine learning | scikit-learn pipelines, point-in-time features, temporal validation, and production scoring |
-| Testing | dbt generic tests and custom SQL tests |
-| Dashboards | Streamlit and Plotly |
-| Version control | Git and GitHub |
+| Modeling | Bronze/Silver/Gold, dimensions, facts, and analytical marts |
+| Machine learning | scikit-learn pipelines and temporal validation |
+| Dashboards | Next.js, Streamlit, and Plotly |
+| Backend testing | Pytest and Ruff |
+| Frontend validation | ESLint and TypeScript |
+| Data testing | dbt generic tests and custom SQL assertions |
+| Version control | Git, GitHub branches, pull requests, releases, and milestone tags |
 
 ---
 
-## 📁 Project Structure
+## Repository Structure
 
 ```text
 kairo-marketplace-analytics/
-├── generator/
-│   ├── entities/
-│   ├── chaos/
-│   └── writers/
+├── apps/
+│   ├── api/
+│   │   ├── alembic/
+│   │   ├── app/
+│   │   │   ├── api/
+│   │   │   ├── core/
+│   │   │   ├── models/
+│   │   │   ├── repositories/
+│   │   │   ├── schemas/
+│   │   │   ├── scripts/
+│   │   │   └── services/
+│   │   ├── scripts/
+│   │   └── tests/
+│   └── storefront/
+│       ├── public/
+│       └── src/
+│           ├── app/
+│           ├── components/
+│           └── lib/
+├── analytics/
+│   ├── churn_model/
+│   ├── demo_ingestion/
+│   └── streamlit_app/
 ├── dbt_project/
 │   ├── models/
 │   │   ├── bronze/
@@ -164,46 +489,110 @@ kairo-marketplace-analytics/
 │   │   └── gold/
 │   ├── macros/
 │   └── tests/
-├── analytics/
-│   ├── churn_model/
-│   │   ├── data/
-│   │   ├── model_artifacts/
-│   │   ├── 01_feature_engineering.py
-│   │   ├── 02_train_model.py
-│   │   ├── 03_write_scores.py
-│   │   └── churn_analysis_report.md
-│   └── streamlit_app/
-│       ├── app.py
-│       └── pages/
+├── generator/
+│   ├── entities/
+│   ├── chaos/
+│   └── writers/
 ├── scripts/
 ├── raw_data/
 ├── raw_data_clean/
 ├── chaos_manifest/
 ├── warehouse/
-└── docs/
-    └── screenshots/
+├── docs/
+│   └── screenshots/
+├── docker-compose.yml
+├── PROJECT_CHARTER.md
+└── README.md
 ```
 
 ---
 
-## 🚀 Quick Start
+## Local Setup
 
 ### Prerequisites
 
+- Git
+- Docker Desktop
+- Node.js and npm
 - Python 3.11+
-- macOS or Linux
+- `uv` for the analytical environment
 
-### Setup
+### 1. Clone the Repository
 
 ```bash
 git clone https://github.com/sriharichepuri21/kairo-marketplace-analytics.git
 cd kairo-marketplace-analytics
+```
+
+### 2. Start PostgreSQL and FastAPI
+
+```bash
+docker compose up --build -d
+```
+
+Apply migrations:
+
+```bash
+docker compose exec -T api alembic upgrade head
+```
+
+Check service health:
+
+```bash
+curl http://localhost:8000/health
+```
+
+Local API locations:
+
+```text
+API:      http://localhost:8000
+API docs: http://localhost:8000/docs
+Health:   http://localhost:8000/health
+```
+
+### 3. Configure and Start the Storefront
+
+```bash
+cp apps/storefront/.env.example apps/storefront/.env.local
+npm --prefix apps/storefront ci
+npm --prefix apps/storefront run dev
+```
+
+Open:
+
+```text
+Storefront: http://localhost:3001
+```
+
+The environment example uses:
+
+```env
+API_URL=http://localhost:8000
+```
+
+### 4. Optional Lightweight Catalog Seed
+
+The catalog seed is idempotent and can be run for a lightweight local development environment:
+
+```bash
+docker compose exec -T api python scripts/seed_catalog.py
+```
+
+The complete analytical and admin demonstration environment uses the larger synthetic generation and demo-ingestion workflows described below.
+
+---
+
+## Analytics Pipeline
+
+### 1. Create the Python Environment
+
+```bash
 uv venv
 source .venv/bin/activate
 uv pip install -e .
 ```
 
-### Generate Marketplace Data
+### 2. Generate Synthetic Marketplace Data
 
 ```bash
 python scripts/generate_customers.py
@@ -215,7 +604,7 @@ python scripts/generate_fulfillment.py
 python scripts/apply_chaos.py
 ```
 
-### Build and Test the Warehouse
+### 3. Build and Test the Warehouse
 
 ```bash
 cd dbt_project
@@ -223,15 +612,15 @@ dbt build
 cd ..
 ```
 
-Expected result:
+Verified result:
 
 ```text
 PASS=153 WARN=5 ERROR=0 SKIP=0 TOTAL=158
 ```
 
-The successful nodes include 28 models and 125 passing tests. Five warnings represent intentionally injected null conditions.
+The successful nodes include 28 models and 125 passing tests. The five warnings represent documented, intentionally injected synthetic conditions.
 
-### Verify Governed Metrics
+### 4. Verify Governed Metrics
 
 ```bash
 python scripts/verify_metrics.py
@@ -240,19 +629,22 @@ python scripts/final_reconciliation.py
 python scripts/marketing_channel_analysis.py
 ```
 
-### Run the Customer Churn Pipeline
+### 5. Run the Customer Intelligence Pipeline
 
 ```bash
-python analytics/churn_model/01_feature_engineering.py
-python analytics/churn_model/02_train_model.py
-python analytics/churn_model/03_write_scores.py
-
-cd dbt_project
-dbt build --select mart_customer_churn_scores
-cd ..
+bash scripts/run_customer_intelligence_pipeline.sh
 ```
 
-### Launch the Dashboards
+The workflow:
+
+1. Checks application services
+2. Exports operational snapshots
+3. Builds operational customer features
+4. Trains or loads the live-compatible model
+5. Scores eligible customers
+6. Synchronizes scores to PostgreSQL
+
+### 6. Launch Streamlit BI
 
 ```bash
 streamlit run analytics/streamlit_app/app.py
@@ -260,12 +652,83 @@ streamlit run analytics/streamlit_app/app.py
 
 ---
 
-## 📊 Governed Business Metrics
+## Testing and Validation
 
-| Metric | Governed Value |
+### Backend Integration Tests
+
+```bash
+docker compose exec -T api pytest -q
+```
+
+Verified result:
+
+```text
+116 passed
+```
+
+Two non-blocking framework deprecation warnings are currently emitted by FastAPI/Starlette dependencies.
+
+### Backend Linting
+
+```bash
+docker compose exec -T api ruff check .
+```
+
+### Storefront Linting
+
+```bash
+npm --prefix apps/storefront run lint
+```
+
+Verified result:
+
+```text
+ESLint passed
+```
+
+### Storefront Type Checking
+
+```bash
+cd apps/storefront
+npx tsc --noEmit
+```
+
+Verified result:
+
+```text
+TypeScript validation passed
+```
+
+### Operational Quality Runner
+
+```bash
+docker compose exec -T api \
+  python -m app.scripts.run_data_quality_checks
+```
+
+### dbt Validation
+
+```bash
+cd dbt_project
+dbt build
+```
+
+Verified result:
+
+```text
+153 pass
+5 documented warnings
+0 errors
+```
+
+---
+
+## Verified Business Metrics
+
+| Metric | Governed value |
 |---|---:|
 | Gross GMV | $383,987,652.90 |
-| Net GMV — primary GMV metric | $372,465,446.03 |
+| Net GMV — primary marketplace-volume metric | $372,465,446.03 |
 | Item discounts | $11,522,206.87 |
 | Item tax | $37,247,710.32 |
 | Customer charged amount | $457,134,465.37 |
@@ -291,53 +754,32 @@ streamlit run analytics/streamlit_app/app.py
 | No sales | 251 | 5.0% |
 | **Total** | **5,000** | **100.0%** |
 
-### Metric Definitions
+### Selected Business Findings
 
-**Gross GMV**
-Merchandise value before item discounts and tax.
-
-**Net GMV**
-Gross GMV minus valid item discounts. Net GMV excludes tax and is the primary marketplace GMV metric.
-
-**Customer charged amount**
-The sum of eligible `fact_orders.total_amount` values, used for customer-LTV and payment reconciliation.
-
-**Commission revenue**
-Marketplace earnings calculated by applying each seller's commission rate to Net GMV.
-
-`fact_order_items.line_total` is not used as GMV because it includes item-level tax.
-
----
-
-## 📈 Business Intelligence Findings
-
-- Referral customers generated **1.71× the average 90-day spend** of paid-search customers: **$725.54 versus $424.96**.
-- Referral customers achieved a **79.0% 90-day repeat rate**, compared with **70.5%** for paid search—an **8.5-percentage-point difference**.
-- Whale-persona customers represented **6.1% of real customers** and **40.2% of real-customer spend**.
-- Electronics generated the largest category contribution with approximately **$108.7M in Net GMV**.
+- Referral customers generated **1.71×** the average 90-day spend of paid-search customers: **$725.54 versus $424.96**.
+- Referral customers achieved a **79.0%** 90-day repeat rate versus **70.5%** for paid search.
+- Whale-persona customers represented **6.1%** of real customers and **40.2%** of real-customer spend.
+- Electronics contributed approximately **$108.7M in Net GMV**, the largest category contribution.
 - The platform maintained a **92.1% on-time delivery rate**.
-- Overall return incidence was **12.1%** across eligible sold items.
-- Seller lifecycle modeling produced **756 at-risk**, **489 churned**, and **251 no-sales sellers** for intervention analysis.
+- Overall return incidence was **12.1%**.
+- Seller lifecycle modeling identified **756 at-risk**, **489 churned**, and **251 no-sales sellers**.
 
 Channel findings are associations partly created by intentional synthetic generator assumptions; they are not causal marketing conclusions.
 
 ---
 
-<!-- CHURN-MODEL:START -->
-## 🤖 Point-in-Time Customer Churn System
+## Point-in-Time Churn System
 
-Kairo includes a point-in-time churn workflow that builds historical customer snapshots, evaluates models on future periods, scores the latest eligible population, and publishes the results through a dbt Gold mart.
-
-### Temporal Modeling Design
+### Temporal Design
 
 | Dataset | Snapshot dates | Rows | Churn rate |
 |---|---|---:|---:|
 | Training | 2024-12-31 and 2025-03-31 | 226,740 | 31.4% |
 | Validation | 2025-06-30 | 148,272 | 27.4% |
 | Test | 2025-09-30 | 172,352 | 23.0% |
-| **All snapshots** | Four point-in-time snapshots | **547,364** | — |
+| **All snapshots** | Four snapshots | **547,364** | — |
 
-Each record represents `customer_id × snapshot_date`. Features use only information available through the snapshot date, and churn means no eligible order during the following 90 days.
+Each record represents `customer_id × snapshot_date`. Features use only information available through the snapshot date. Churn is defined as no eligible order during the following 90 days.
 
 The primary model excludes the synthetic `segment` field because it is intentionally correlated with generated purchasing behavior.
 
@@ -353,9 +795,9 @@ The primary model excludes the synthetic `segment` field because it is intention
 | Top-10% lift | 2.51× | 2.52× | +0.01× |
 | Top-20% recall | 43.23% | 43.33% | +0.10 pp |
 
-Signup channel added negligible out-of-time predictive value, so the simpler **behavioral-only model** was promoted for production scoring.
+Signup channel added negligible out-of-time predictive value, so the simpler behavioral-only model was promoted.
 
-### Production Scoring Output
+### Analytical Production Scoring Output
 
 | Metric | Result |
 |---|---:|
@@ -369,17 +811,7 @@ Signup channel added negligible out-of-time predictive value, so the simpler **b
 | High-risk lifetime spend | Approximately $32.0M |
 | Missing lifetime-spend values tracked | 18 |
 
-Operational risk segments are capacity-based:
-
-| Risk segment | Definition | Customers | Share |
-|---|---|---:|---:|
-| High risk | Risk deciles 1–2 | 39,510 | 20.0% |
-| Medium risk | Risk deciles 3–5 | 59,263 | 30.0% |
-| Low risk | Risk deciles 6–10 | 98,773 | 50.0% |
-
-The validation-selected threshold is stored separately as `predicted_churn_flag`; it does not define outreach capacity.
-
-### Intervention Framework
+### Retention Actions
 
 | Recommended action | Customers |
 |---|---:|
@@ -390,125 +822,50 @@ The validation-selected threshold is stored separately as `predicted_churn_flag`
 | Targeted retention incentive | 7,499 |
 | Priority retention outreach | 529 |
 
-### Churn Pipeline
+### Live-Compatible Operational Scoring
 
-```text
-Historical Gold Models
-        │
-        ▼
-Point-in-Time Feature Engineering
-├── Four temporal snapshots
-├── 25 behavioral features
-├── Timestamp-specific filtering
-├── Single-order customer inclusion
-└── 90-day future-purchase churn label
-        │
-        ▼
-Out-of-Time Model Evaluation
-├── Behavioral-only model
-├── Behavioral + signup-channel experiment
-├── Validation threshold selection
-└── Final untouched test period
-        │
-        ▼
-Production Scoring
-├── Churn probability
-├── Threshold prediction
-├── Risk decile
-├── Capacity-based risk segment
-└── Recommended action
-        │
-        ▼
-dbt Gold mart_customer_churn_scores
-        │
-        ▼
-Streamlit Customer Churn Risk Dashboard
-```
-
-### Run the Churn Pipeline
-
-```bash
-python analytics/churn_model/01_feature_engineering.py
-python analytics/churn_model/02_train_model.py
-python analytics/churn_model/03_write_scores.py
-
-cd dbt_project
-dbt build --select mart_customer_churn_scores
-cd ..
-```
-<!-- CHURN-MODEL:END -->
+The operational pipeline also trains and publishes a live-compatible model against the PostgreSQL demonstration population. This score set is kept separate from the large historical analytical scoring output because the populations and snapshot dates differ.
 
 ---
 
-## 🔬 Data Quality and Chaos Engineering
+## Limitations
 
-The chaos engine injects nine categories of production-style issues:
-
-| Chaos Type | Example |
-|---|---|
-| Near-duplicate records | Payment retries and CDC replays |
-| Null variants | `"N/A"`, `""`, `"NULL"`, and `"-"` |
-| Type drift | Numeric values represented as strings |
-| Encoding corruption | Character-set inconsistencies |
-| Late-arriving records | Delayed events and batch outages |
-| Orphan foreign keys | Deleted or missing dimension records |
-| Business-rule violations | Negative quantities and impossible discounts |
-| Zombie test data | QA records left in production |
-| Schema evolution | Added or renamed source columns |
-
-Every injected change is recorded in `chaos_manifest/` for audit and comparison.
+- All marketplace data is synthetic.
+- Business findings demonstrate analytical method, not real-world causal evidence.
+- The latest PostgreSQL counts reflect one local demonstration database and can change.
+- The lightweight catalog seed does not reproduce the complete dashboard dataset.
+- The full analytical pipeline requires more storage and runtime than the operational demo.
+- Public cloud deployment is optional and is not required to reproduce the project locally.
+- The application should not be described as publicly production-deployed unless a real hosting environment is created.
 
 ---
 
-## 🧪 Testing and Reconciliation
+## Project Milestones
 
-Current dbt validation:
+- `analytics-v1`
+- `analytics-v2`
+- `operations-dashboard-v1`
+- `observability-v1`
 
-```text
-Models: 28
-Tests: 130
-Passing tests: 125
-Documented warnings: 5
-Errors: 0
-```
-
-Validation includes:
-
-- Primary-key uniqueness
-- Required-field checks
-- Accepted categorical values
-- Fact-to-dimension referential integrity
-- Unknown-member customer reconciliation
-- Orders occurring after customer signup
-- Non-negative governed GMV
-- Cross-model customer-spend reconciliation
-- Cross-model seller and marketplace GMV reconciliation
-
-All governed cross-model financial checks reconcile with **$0 variance**.
+These tags preserve major stages of the platform as reproducible Git milestones.
 
 ---
 
-## 📋 Business Context
+## About
 
-Kairo is a fictional global marketplace operating across the United States, European Union, and Latin America.
+Built by **Srihari Chepuri** as a portfolio project demonstrating:
 
-- **Scale:** 200K customers, 5K sellers, and 50K products
-- **Revenue model:** Tiered seller commissions applied to Net GMV
-- **Effective take rate:** 13.19%
-- **Primary stakeholders:** Executives, category managers, seller-success teams, retention teams, and analytics engineers
+- Business Intelligence Engineering
+- Analytics Engineering
+- Data Engineering
+- Full-Stack Application Development
+- Machine Learning
+- Data Quality and Observability
 
-See [PROJECT_CHARTER.md](./PROJECT_CHARTER.md) for the complete business context and stakeholder definitions.
-
----
-
-## 👤 About
-
-Built by **Srihari Chepuri** as a portfolio project demonstrating end-to-end Business Intelligence Engineering, analytics engineering, dimensional modeling, metric governance, data-quality testing, point-in-time machine learning, production scoring, and stakeholder reporting.
-
-- GitHub: [@sriharichepuri21](https://github.com/sriharichepuri21)
+GitHub: [@sriharichepuri21](https://github.com/sriharichepuri21)
 
 ---
 
-## 📄 License
+## License
 
 This project is available under the [MIT License](LICENSE).
