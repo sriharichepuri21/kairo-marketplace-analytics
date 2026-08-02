@@ -153,6 +153,13 @@ Operational counts represent the current local synthetic demonstration database 
 
 ## Architecture
 
+Kairo combines synthetic e-commerce data generation, governed analytics, machine learning, operational APIs, and full-stack marketplace experiences.
+
+![Kairo Marketplace Platform Architecture](docs/screenshots/kairo-platform-architecture.png)
+
+> Current local architecture with AWS deployment shown as a future roadmap.
+
+
 ```mermaid
 flowchart TD
     subgraph A["Synthetic Analytics Platform"]
