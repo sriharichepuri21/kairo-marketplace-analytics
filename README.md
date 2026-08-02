@@ -370,6 +370,68 @@ All endpoints require an authenticated administrator.
 
 ---
 
+## Full-Stack Admin Dashboards
+
+### Operations Overview
+
+The Operations dashboard summarizes order volume, eligible orders, active customers, fulfilment outcomes, and revenue by transaction currency.
+
+![Operations Dashboard](docs/screenshots/app_admin_operations_overview.png)
+
+<details>
+<summary><strong>View additional Operations dashboard panels</strong></summary>
+
+### Revenue Trends
+
+![Revenue Trends](docs/screenshots/app_admin_revenue_trend.png)
+
+### Conversion Funnel
+
+![Conversion Funnel](docs/screenshots/app_admin_conversion_funnel.png)
+
+### Category Performance
+
+![Category Performance](docs/screenshots/app_admin_category_performance.png)
+
+### Inventory Health
+
+![Inventory Health](docs/screenshots/app_admin_inventory_health.png)
+
+### Order-Status Distribution
+
+![Order-Status Distribution](docs/screenshots/app_admin_order_status.png)
+
+</details>
+
+### Customer Churn Intelligence
+
+The Churn dashboard prioritizes retention outreach using point-in-time customer behavior, recency, churn probability, risk segmentation, and recommended actions.
+
+![Churn Risk Dashboard](docs/screenshots/app_admin_churn_overview.png)
+
+<details>
+<summary><strong>View the customer risk queue</strong></summary>
+
+![Customer Churn Scores](docs/screenshots/app_admin_churn_customers.png)
+
+</details>
+
+### Data-Quality Observability
+
+The Data Quality dashboard exposes persisted operational checks, warning and failure details, observed-versus-expected values, and historical run results.
+
+![Data-Quality Dashboard](docs/screenshots/app_admin_data_quality_overview.png)
+
+<details>
+<summary><strong>View warning details and run history</strong></summary>
+
+![Data-Quality Warning and History](docs/screenshots/app_admin_data_quality_details.png)
+
+</details>
+
+
+---
+
 ## Screenshots
 
 ### Data-Quality Overview
